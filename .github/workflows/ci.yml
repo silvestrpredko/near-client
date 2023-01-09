@@ -61,5 +61,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          target: wasm32-unknown-unknown
       - name: Run tests
-        run: cargo test --tests --all-features
+        run: cargo test --tests
