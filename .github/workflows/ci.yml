@@ -1,0 +1,65 @@
+name: CI
+
+env:
+  CARGO_TERM_COLOR: always
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+    branches:
+      - develop
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt
+      - name: cargo fmt
+        run: cargo +nightly fmt -- --check
+  doc:
+    name: doc
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: cargo doc
+        run: cargo doc
+  clippy:
+    name: clippy
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy
+      - name: cargo clippy
+        run: cargo +nightly clippy --workspace --tests -- -D warnings
+  tests:
+    name: tests
+    needs: [clippy, fmt, doc]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Run tests
+        run: cargo test --tests --all-features
