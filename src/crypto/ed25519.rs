@@ -80,7 +80,7 @@ impl From<&Ed25519SecretKey> for Ed25519PublicKey {
 
 // This `Hash` implementation is safe since it retains the property
 // `k1 == k2 ⇒ hash(k1) == hash(k2)`.
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for Ed25519PublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u8(0u8);
@@ -197,7 +197,7 @@ impl BorshSerialize for Ed25519Signature {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for Ed25519Signature {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_bytes().hash(state);

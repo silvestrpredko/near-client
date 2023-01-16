@@ -13,20 +13,15 @@ use near_primitives_core::{
 pub type StateRoot = CryptoHash;
 
 /// Different types of finality.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub enum Finality {
     #[serde(rename = "optimistic")]
     None,
     #[serde(rename = "near-final")]
     DoomSlug,
     #[serde(rename = "final")]
+    #[default]
     Final,
-}
-
-impl Default for Finality {
-    fn default() -> Self {
-        Finality::Final
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
