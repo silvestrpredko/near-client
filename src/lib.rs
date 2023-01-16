@@ -1,4 +1,6 @@
-//! wrfugweiyfugewifwef
+//! Simple near client for contract function calls.
+//! Has a multiplatform support.
+//! The main goal of this client is to run on wasm32 architecture.
 
 pub mod client;
 pub mod crypto;
@@ -15,13 +17,7 @@ pub mod prelude {
     pub use super::utils::*;
 }
 
-/// wefwefwe
-/// wef
-/// wefwe
-/// fwef
-/// wef
-/// wefwe
-/// f
+/// Describes errors that could be thrown during execution
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to create a signer, cause [\"{0}\"]")]

@@ -593,9 +593,12 @@ impl From<SignedTransaction> for SignedTransactionView {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(
+    BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone, Default,
+)]
 pub enum FinalExecutionStatus {
     /// The execution has not yet started.
+    #[default]
     NotStarted,
     /// The execution has started and still going.
     Started,
@@ -615,12 +618,6 @@ impl fmt::Debug for FinalExecutionStatus {
                 f.write_fmt(format_args!("SuccessValue({v:?})"))
             }
         }
-    }
-}
-
-impl Default for FinalExecutionStatus {
-    fn default() -> Self {
-        FinalExecutionStatus::NotStarted
     }
 }
 

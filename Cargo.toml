@@ -1,12 +1,15 @@
 [package]
 name = "near-client"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["silvestr@relayz.io", "kyrylo@relayz.io"]
+repository = "https://github.com/Relayz-io/near-client"
+license = "MIT OR Apache-2.0"
+keywords = ["near", "client", "wasm"]
+categories = ["wasm", "finance"]
 description = """
-This crate is used between other crates to provide the same
-API for signing data and shared types. Please note that all data
-structures should be serializable with "serde" and "borsh"
+Used for accessing a contract API from any platform.
+Primarily designed for WebAssembly.
 """
 
 [dependencies]
