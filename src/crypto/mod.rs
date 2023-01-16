@@ -1,4 +1,7 @@
-//! Basically something awesome
+//! Fast and efficient Rust implementation of ed25519 key generation, signing, and verification
+//! Used a [Dalek](https://github.com/dalek-cryptography/ed25519-dalek) cryptography
+//! By default near is using two kinds of keys. ed25519 and secp256k1.
+//! For simplicity secp256k1 is removed and used ed25519 only.
 
 #[macro_use]
 mod serde_impl {

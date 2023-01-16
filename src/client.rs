@@ -31,13 +31,10 @@ use url::Url;
 
 use std::{
     ops::Deref,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicU64, Ordering},
 };
 
-type AtomicNonce = Arc<AtomicU64>;
+type AtomicNonce = AtomicU64;
 
 /// Used for signing a transactions
 pub struct Signer {
@@ -52,7 +49,7 @@ impl Signer {
         Ok(Self {
             keypair: Keypair::from_expanded_secret(secret_key).map_err(Error::CreateSigner)?,
             account_id,
-            nonce: AtomicNonce::new(AtomicU64::new(nonce)),
+            nonce: AtomicU64::new(nonce),
         })
     }
 
@@ -60,7 +57,7 @@ impl Signer {
         Self {
             keypair: Keypair::new(secret_key),
             account_id,
-            nonce: AtomicNonce::new(AtomicU64::new(nonce)),
+            nonce: AtomicU64::new(nonce),
         }
     }
 
