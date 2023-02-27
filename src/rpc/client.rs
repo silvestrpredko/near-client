@@ -138,8 +138,8 @@ mod tests {
         };
 
         assert_eq!(
-            serde_json::to_value(&resp).unwrap(),
-            serde_json::to_value(&serde_json::json!({
+            serde_json::to_value(resp).unwrap(),
+            serde_json::to_value(serde_json::json!({
                 "id": "dontcare",
                 "jsonrpc": "2.0",
                 "result": "some value",
