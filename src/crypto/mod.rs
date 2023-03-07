@@ -41,6 +41,7 @@ mod serde_impl {
 
 pub mod dhx;
 pub mod ed25519;
+/// Crypto prelude
 pub mod prelude {
     pub use super::{
         dhx::{PublicKey, SecretKey, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH},
@@ -61,9 +62,9 @@ pub(crate) const X25519: &str = "x25519";
 
 /// ## Key
 /// **KEY_LENGTH** - It's a key size for ed25519 or x25519
-/// **KEY_TYPE** - Key type, for internal usage to reduce a boilerplate code.
-/// It's a prefix for a key string serialization. Possible values are ["ed25519", "x25519"]
 pub trait Key<const KEY_LENGTH: usize>: Sized {
+    /// **KEY_TYPE** - Key type, for internal usage to reduce a boilerplate code.
+    /// It's a prefix for a key string serialization. Possible values are ["ed25519", "x25519"]
     const KEY_TYPE: &'static str;
 
     /// Parse an encoded string to the corresponding [`Key`]
@@ -103,31 +104,45 @@ pub trait Key<const KEY_LENGTH: usize>: Sized {
     fn to_bytes(&self) -> [u8; KEY_LENGTH];
 }
 
+/// Errors that happens during crypto operations
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    /// Convert Error, happens during conversion from a bytes
     #[error("Couldn't convert key from bytes \"{data}\" into \"{key_name}\", because of: {cause}")]
     ConvertFromBytes {
+        /// Key type ed25519 or x25519
         key_name: &'static str,
+        /// Data that cause an error
         data: String,
+        /// Actual cause
         cause: String,
     },
+    /// Convert Error, happens during conversion from a string
     #[error(
         "Couldn't convert key from string \"{data}\" into \"{key_name}\", because of: {cause}"
     )]
     ConvertFromString {
+        /// Key type ed25519 or x25519
         key_name: &'static str,
+        /// Data that cause an error
         data: String,
+        /// Actual cause
         cause: String,
     },
+    /// Used an unknown key prefix
     #[error("The key format \"{0}\" seems different from ed25519 or x25519 format")]
     UnknownKeyType(String),
+    /// Key type error
     #[error(
         "The expected key type \"{expected_key_type}\" is different from actual \"{key_type}\""
     )]
     WrongKeyType {
+        /// Something different than ed25519 or x25519
         key_type: String,
+        /// Key type ed25519 or x25519
         expected_key_type: &'static str,
     },
+    /// Signature verification Error
     #[error("Signature \"{0}\" verification failed")]
     Verification(String),
 }
