@@ -32,6 +32,13 @@ impl BorshDeserialize for SecretKey {
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))?;
         Ok(secret_key)
     }
+
+    // Uncomment when up to the next version of borsh
+    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        Self::deserialize(&mut &buf[..])
+    }*/
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -49,6 +56,13 @@ impl BorshDeserialize for PublicKey {
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))?;
         Ok(public_key)
     }
+
+    // Uncomment when up to the next version of borsh
+    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        Self::deserialize(&mut &buf[..])
+    }*/
 }
 
 impl Display for PublicKey {

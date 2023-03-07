@@ -25,6 +25,7 @@ use crate::{
 };
 
 use crate::crypto::prelude::*;
+use base64::prelude::*;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use url::Url;
@@ -134,6 +135,7 @@ impl NearClient {
         method: &'static str,
         args: Option<Value>,
     ) -> Result<ViewOutput<T>> {
+        let args = BASE64_STANDARD_NO_PAD.encode(serialize_arguments(args)?);
         self.rpc_client
             .request(
                 "query",
@@ -142,7 +144,7 @@ impl NearClient {
                     "finality": finality,
                     "account_id": contract_id,
                     "method_name": method,
-                    "args_base64": base64::encode(serialize_arguments(args)?)
+                    "args_base64": args
                 })),
             )
             .await
@@ -430,16 +432,13 @@ impl<'a> FunctionCall<'a> {
     /// Sends a transaction and waits until transaction is fully complete. (Has a 10 second timeout)
     /// Also, possible that an output data will be empty if the transaction is still executing
     pub async fn commit(self, block_finality: Finality) -> Result<Output> {
-        let transaction_bytes =
-            serialize_transaction(&self.info, self.actions, block_finality).await?;
+        let transaction_bytes = BASE64_STANDARD_NO_PAD
+            .encode(serialize_transaction(&self.info, self.actions, block_finality).await?);
 
         let execution_outcome = self
             .info
             .rpc()
-            .request(
-                "broadcast_tx_commit",
-                Some(json!(vec![base64::encode(transaction_bytes)])),
-            )
+            .request("broadcast_tx_commit", Some(json!(vec![transaction_bytes])))
             .await
             .map_err(Error::CommitTransaction)
             .and_then(|execution_outcome| {
@@ -452,14 +451,11 @@ impl<'a> FunctionCall<'a> {
 
     /// Sends a transaction and immediately returns transaction hash.
     pub async fn commit_async(self, block_finality: Finality) -> Result<CryptoHash> {
-        let transaction_bytes =
-            serialize_transaction(&self.info, self.actions, block_finality).await?;
+        let transaction_bytes = BASE64_STANDARD_NO_PAD
+            .encode(serialize_transaction(&self.info, self.actions, block_finality).await?);
         self.info
             .rpc()
-            .request(
-                "broadcast_tx_async",
-                Some(json!(vec![base64::encode(transaction_bytes)])),
-            )
+            .request("broadcast_tx_async", Some(json!(vec![transaction_bytes])))
             .await
             .map_err(Error::CommitAsyncTransaction)
             .and_then(|id| {

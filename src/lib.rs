@@ -8,13 +8,17 @@ pub mod near_primitives_light;
 pub(crate) mod rpc;
 pub mod utils;
 
-pub use near_primitives_light::types::Finality;
+pub use near_primitives_core as core;
+pub use near_units;
 
 type Result<T> = std::result::Result<T, Error>;
 
 pub mod prelude {
     pub use super::client::*;
+    pub use super::crypto::prelude::*;
+    pub use super::near_primitives_light::types::Finality;
     pub use super::utils::*;
+    pub use near_primitives_core::types::AccountId;
 }
 
 /// Describes errors that could be thrown during execution

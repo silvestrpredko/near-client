@@ -2,74 +2,28 @@ use super::{errors::TxExecutionError, receipt::*, transaction::*, types::*};
 use crate::crypto::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 use chrono::DateTime;
-use serde::{Deserialize, Serialize};
-use std::{fmt, sync::Arc};
+use std::fmt;
+use strum::IntoEnumIterator;
 
 use near_primitives_core::{
-    account::{AccessKey, AccessKeyPermission, Account, FunctionCallPermission},
+    account::Account,
+    account::{AccessKey, AccessKeyPermission, FunctionCallPermission},
+    config::{ActionCosts, ExtCosts},
     contract::ContractCode,
-    hash::{hash, CryptoHash},
-    profile::Cost,
+    hash::hash,
+    hash::CryptoHash,
     serialize::{base64_format, dec_format, option_base64_format},
-    types::*,
+    types::{
+        AccountId, Balance, BlockHeight, Gas, Nonce, NumBlocks, ProtocolVersion, ShardId,
+        StorageUsage,
+    },
 };
 
-#[derive(
-    BorshSerialize,
-    BorshDeserialize,
-    Serialize,
-    Deserialize,
-    Hash,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Clone,
-    Debug,
-    Default,
-)]
-pub struct ChunkHash(pub CryptoHash);
-
-impl ChunkHash {
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        self.0.as_bytes()
-    }
-}
-
-impl AsRef<[u8]> for ChunkHash {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl From<ChunkHash> for Vec<u8> {
-    fn from(chunk_hash: ChunkHash) -> Self {
-        chunk_hash.0.into()
-    }
-}
-
-impl From<CryptoHash> for ChunkHash {
-    fn from(crypto_hash: CryptoHash) -> Self {
-        Self(crypto_hash)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-pub struct MerklePathItem {
-    pub hash: MerkleHash,
-    pub direction: Direction,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-pub enum Direction {
-    Left,
-    Right,
-}
-
-pub type MerklePath = Vec<MerklePathItem>;
+pub type EpochId = CryptoHash;
+pub type ChunkHash = CryptoHash;
 
 /// A view of the account
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct AccountView {
     #[serde(with = "dec_format")]
     pub amount: Balance,
@@ -83,7 +37,7 @@ pub struct AccountView {
 }
 
 /// A view of the contract code.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ContractCodeView {
     #[serde(rename = "code_base64", with = "base64_format")]
     pub code: Vec<u8>,
@@ -134,7 +88,16 @@ impl From<ContractCodeView> for ContractCode {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Eq,
+    PartialEq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum AccessKeyPermissionView {
     FunctionCall {
         #[serde(with = "dec_format")]
@@ -175,7 +138,16 @@ impl From<AccessKeyPermissionView> for AccessKeyPermission {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Eq,
+    PartialEq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct AccessKeyView {
     pub nonce: Nonce,
     pub permission: AccessKeyPermissionView,
@@ -199,48 +171,25 @@ impl From<AccessKeyView> for AccessKey {
     }
 }
 
-/// Item of the state, key and value are serialized in base64 and proof for inclusion of given state item.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct StateItem {
-    #[serde(with = "base64_format")]
-    pub key: Vec<u8>,
-    #[serde(with = "base64_format")]
-    pub value: Vec<u8>,
-    /// Deprecated, always empty, eventually will be deleted.
-    // TODO(mina86): This was deprecated in 1.30.  Get rid of the field
-    // altogether at 1.33 or something.
-    #[serde(default)]
-    pub proof: Vec<()>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ViewStateResult {
-    pub values: Vec<StateItem>,
-    // TODO(mina86): Empty proof (i.e. sending proof when include_proof is not
-    // set in the request) was deprecated in 1.30.  Add
-    // `#[serde(skip(Vec::if_empty))` at 1.33 or something.
-    pub proof: Vec<Arc<[u8]>>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Default)]
 pub struct CallResult {
     pub result: Vec<u8>,
     pub logs: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct QueryError {
     pub error: String,
     pub logs: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct AccessKeyInfoView {
     pub public_key: Ed25519PublicKey,
     pub access_key: AccessKeyView,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct AccessKeyList {
     pub keys: Vec<AccessKeyInfoView>,
 }
@@ -253,7 +202,7 @@ impl FromIterator<AccessKeyInfoView> for AccessKeyList {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub struct BlockStatusView {
     pub height: BlockHeight,
     pub hash: CryptoHash,
@@ -268,7 +217,7 @@ impl BlockStatusView {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct BlockByChunksView {
     pub height: BlockHeight,
     pub hash: CryptoHash,
@@ -276,41 +225,16 @@ pub struct BlockByChunksView {
     pub chunk_status: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChainProcessingInfo {
-    pub num_blocks_in_processing: usize,
-    pub num_orphans: usize,
-    pub num_blocks_missing_chunks: usize,
-    /// contains processing info of recent blocks, ordered by height high to low
-    pub blocks_info: Vec<BlockProcessingInfo>,
-    /// contains processing info of chunks that we don't know which block it belongs to yet
-    pub floating_chunks_info: Vec<ChunkProcessingInfo>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BlockProcessingInfo {
-    pub height: BlockHeight,
-    pub hash: CryptoHash,
-    pub received_timestamp: DateTime<chrono::Utc>,
-    /// Timestamp when block was received.
-    //pub received_timestamp: DateTime<chrono::Utc>,
-    /// Time (in ms) between when the block was first received and when it was processed
-    pub in_progress_ms: u128,
-    /// Time (in ms) that the block spent in the orphan pool. If the block was never put in the
-    /// orphan pool, it is None. If the block is still in the orphan pool, it is since the time
-    /// it was put into the pool until the current time.
-    pub orphaned_ms: Option<u128>,
-    /// Time (in ms) that the block spent in the missing chunks pool. If the block was never put in the
-    /// missing chunks pool, it is None. If the block is still in the missing chunks pool, it is
-    /// since the time it was put into the pool until the current time.
-    pub missing_chunks_ms: Option<u128>,
-    pub block_status: BlockProcessingStatus,
-    /// Only contains new chunks that belong to this block, if the block doesn't produce a new chunk
-    /// for a shard, the corresponding item will be None.
-    pub chunks_info: Vec<Option<ChunkProcessingInfo>>,
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum BlockProcessingStatus {
     Orphan,
     WaitingForChunks,
@@ -321,7 +245,16 @@ pub enum BlockProcessingStatus {
     Unknown,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum DroppedReason {
     // If the node has already processed a block at this height
     HeightProcessed,
@@ -329,7 +262,7 @@ pub enum DroppedReason {
     TooManyProcessingBlocks,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ChunkProcessingInfo {
     pub height_created: BlockHeight,
     pub shard_id: ShardId,
@@ -348,7 +281,7 @@ pub struct ChunkProcessingInfo {
     pub chunk_parts_collection: Vec<PartCollectionInfo>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct PartCollectionInfo {
     pub part_owner: AccountId,
     // Time when the part is received through any message
@@ -359,14 +292,14 @@ pub struct PartCollectionInfo {
     pub chunk_received_time: Option<DateTime<chrono::Utc>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub enum ChunkProcessingStatus {
     NeedToRequest,
     Requested,
     Completed,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct BlockHeaderView {
     pub height: BlockHeight,
     pub prev_height: Option<BlockHeight>,
@@ -408,7 +341,7 @@ pub struct BlockHeaderView {
     pub latest_protocol_version: ProtocolVersion,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ChunkHeaderView {
     pub chunk_hash: CryptoHash,
     pub prev_block_hash: CryptoHash,
@@ -434,14 +367,14 @@ pub struct ChunkHeaderView {
     pub signature: Ed25519Signature,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct BlockView {
     pub author: AccountId,
     pub header: BlockHeaderView,
     pub chunks: Vec<ChunkHeaderView>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ChunkView {
     pub author: AccountId,
     pub header: ChunkHeaderView,
@@ -449,7 +382,16 @@ pub struct ChunkView {
     pub receipts: Vec<ReceiptView>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum ActionView {
     CreateAccount,
     DeployContract {
@@ -483,6 +425,10 @@ pub enum ActionView {
     DeleteAccount {
         beneficiary_id: AccountId,
     },
+    Delegate {
+        delegate_action: DelegateAction,
+        signature: Ed25519Signature,
+    },
 }
 
 impl From<Action> for ActionView {
@@ -515,6 +461,10 @@ impl From<Action> for ActionView {
             },
             Action::DeleteAccount(action) => ActionView::DeleteAccount {
                 beneficiary_id: action.beneficiary_id,
+            },
+            Action::Delegate(action) => ActionView::Delegate {
+                delegate_action: action.delegate_action,
+                signature: action.signature,
             },
         }
     }
@@ -557,11 +507,27 @@ impl TryFrom<ActionView> for Action {
             ActionView::DeleteAccount { beneficiary_id } => {
                 Action::DeleteAccount(DeleteAccountAction { beneficiary_id })
             }
+            ActionView::Delegate {
+                delegate_action,
+                signature,
+            } => Action::Delegate(SignedDelegateAction {
+                delegate_action,
+                signature,
+            }),
         })
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct SignedTransactionView {
     pub signer_id: AccountId,
     pub public_key: Ed25519PublicKey,
@@ -592,10 +558,17 @@ impl From<SignedTransaction> for SignedTransactionView {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(
-    BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone, Default,
+    BorshSerialize,
+    BorshDeserialize,
+    serde::Serialize,
+    serde::Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Default,
 )]
+#[allow(clippy::large_enum_variant)]
 pub enum FinalExecutionStatus {
     /// The execution has not yet started.
     #[default]
@@ -613,7 +586,7 @@ impl fmt::Debug for FinalExecutionStatus {
         match self {
             FinalExecutionStatus::NotStarted => f.write_str("NotStarted"),
             FinalExecutionStatus::Started => f.write_str("Started"),
-            FinalExecutionStatus::Failure(e) => f.write_fmt(format_args!("Failure({e:?})")),
+            FinalExecutionStatus::Failure(e) => f.write_fmt(format_args!("Failure({:?})", e)),
             FinalExecutionStatus::SuccessValue(v) => {
                 f.write_fmt(format_args!("SuccessValue({v:?})"))
             }
@@ -621,16 +594,27 @@ impl fmt::Debug for FinalExecutionStatus {
     }
 }
 
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[allow(clippy::large_enum_variant)]
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum ServerError {
     TxExecutionError(TxExecutionError),
     Timeout,
     Closed,
 }
 
+#[derive(
+    BorshSerialize, BorshDeserialize, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone,
+)]
 #[allow(clippy::large_enum_variant)]
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum ExecutionStatusView {
     /// The execution is pending or unknown.
     Unknown,
@@ -647,12 +631,12 @@ impl fmt::Debug for ExecutionStatusView {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ExecutionStatusView::Unknown => f.write_str("Unknown"),
-            ExecutionStatusView::Failure(e) => f.write_fmt(format_args!("Failure({e:?})")),
+            ExecutionStatusView::Failure(e) => f.write_fmt(format_args!("Failure({:?})", e)),
             ExecutionStatusView::SuccessValue(v) => {
                 f.write_fmt(format_args!("SuccessValue({v:?})"))
             }
             ExecutionStatusView::SuccessReceiptId(receipt_id) => {
-                f.write_fmt(format_args!("SuccessReceiptId({receipt_id})"))
+                f.write_fmt(format_args!("SuccessReceiptId({})", receipt_id))
             }
         }
     }
@@ -671,7 +655,16 @@ impl From<ExecutionStatus> for ExecutionStatusView {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Clone, Eq, Debug)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    PartialEq,
+    Clone,
+    Eq,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct CostGasUsed {
     pub cost_category: String,
     pub cost: String,
@@ -679,7 +672,16 @@ pub struct CostGasUsed {
     pub gas_used: Gas,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Clone, Eq, Debug)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    PartialEq,
+    Clone,
+    Eq,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct ExecutionMetadataView {
     pub version: u32,
     pub gas_profile: Option<Vec<CostGasUsed>>,
@@ -693,55 +695,128 @@ impl Default for ExecutionMetadataView {
 
 impl From<ExecutionMetadata> for ExecutionMetadataView {
     fn from(metadata: ExecutionMetadata) -> Self {
-        let gas_profile = match metadata {
+        let version = match metadata {
+            ExecutionMetadata::V1 => 1,
+            ExecutionMetadata::V2(_) => 2,
+            ExecutionMetadata::V3(_) => 3,
+        };
+        let mut gas_profile = match metadata {
             ExecutionMetadata::V1 => None,
             ExecutionMetadata::V2(profile_data) => {
-                let mut costs: Vec<_> = Cost::ALL
-                    .iter()
-                    .filter(|&cost| profile_data[*cost] > 0)
-                    .map(|&cost| CostGasUsed {
-                        cost_category: match cost {
-                            Cost::ActionCost { .. } => "ACTION_COST",
-                            Cost::ExtCost { .. } => "WASM_HOST_COST",
-                            Cost::WasmInstruction => "WASM_HOST_COST",
-                        }
-                        .to_string(),
-                        cost: match cost {
-                            Cost::ActionCost {
-                                action_cost_kind: action_cost,
-                            } => format!("{action_cost:?}").to_ascii_uppercase(),
-                            Cost::ExtCost {
-                                ext_cost_kind: ext_cost,
-                            } => format!("{ext_cost:?}").to_ascii_uppercase(),
-                            Cost::WasmInstruction => "WASM_INSTRUCTION".to_string(),
-                        },
-                        gas_used: profile_data[cost],
+                // Add actions, wasm op, and ext costs in groups.
+
+                // actions should use the old format, since `ActionCosts`
+                // includes more detailed entries than were present in the old
+                // profile
+                let mut costs: Vec<CostGasUsed> = profile_data
+                    .legacy_action_costs()
+                    .into_iter()
+                    .filter(|&(_, gas)| gas > 0)
+                    .map(|(name, gas)| CostGasUsed::action(name.to_string(), gas))
+                    .collect();
+
+                // wasm op is a single cost, for historical reasons it is inaccurately displayed as "wasm host"
+                costs.push(CostGasUsed::wasm_host(
+                    "WASM_INSTRUCTION".to_string(),
+                    profile_data.get_wasm_cost(),
+                ));
+
+                // ext costs are 1-to-1, except for those added later which we will display as 0
+                for ext_cost in ExtCosts::iter() {
+                    costs.push(CostGasUsed::wasm_host(
+                        format!("{:?}", ext_cost).to_ascii_uppercase(),
+                        profile_data.get_ext_cost(ext_cost),
+                    ));
+                }
+
+                Some(costs)
+            }
+            ExecutionMetadata::V3(profile) => {
+                // Add actions, wasm op, and ext costs in groups.
+                // actions costs are 1-to-1
+                let mut costs: Vec<CostGasUsed> = ActionCosts::iter()
+                    .flat_map(|cost| {
+                        let gas_used = profile.get_action_cost(cost);
+                        (gas_used > 0).then(|| {
+                            CostGasUsed::action(
+                                format!("{:?}", cost).to_ascii_uppercase(),
+                                gas_used,
+                            )
+                        })
                     })
                     .collect();
 
-                // The order doesn't really matter, but the default one is just
-                // historical, which is especially unintuitive, so let's sort
-                // lexicographically.
-                //
-                // Can't `sort_by_key` here because lifetime inference in
-                // closures is limited.
-                costs.sort_by(|lhs, rhs| {
-                    lhs.cost_category
-                        .cmp(&rhs.cost_category)
-                        .then(lhs.cost.cmp(&rhs.cost))
-                });
+                // wasm op is a single cost, for historical reasons it is inaccurately displayed as "wasm host"
+                let wasm_gas_used = profile.get_wasm_cost();
+                if wasm_gas_used > 0 {
+                    costs.push(CostGasUsed::wasm_host(
+                        "WASM_INSTRUCTION".to_string(),
+                        wasm_gas_used,
+                    ));
+                }
+
+                // ext costs are 1-to-1
+                for ext_cost in ExtCosts::iter() {
+                    let gas_used = profile.get_ext_cost(ext_cost);
+                    if gas_used > 0 {
+                        costs.push(CostGasUsed::wasm_host(
+                            format!("{:?}", ext_cost).to_ascii_uppercase(),
+                            gas_used,
+                        ));
+                    }
+                }
 
                 Some(costs)
             }
         };
+        if let Some(ref mut costs) = gas_profile {
+            // The order doesn't really matter, but the default one is just
+            // historical, which is especially unintuitive, so let's sort
+            // lexicographically.
+            //
+            // Can't `sort_by_key` here because lifetime inference in
+            // closures is limited.
+            costs.sort_by(|lhs, rhs| {
+                lhs.cost_category
+                    .cmp(&rhs.cost_category)
+                    .then_with(|| lhs.cost.cmp(&rhs.cost))
+            });
+        }
         ExecutionMetadataView {
-            version: 1,
+            version,
             gas_profile,
         }
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+impl CostGasUsed {
+    pub fn action(cost: String, gas_used: Gas) -> Self {
+        Self {
+            cost_category: "ACTION_COST".to_string(),
+            cost,
+            gas_used,
+        }
+    }
+
+    pub fn wasm_host(cost: String, gas_used: Gas) -> Self {
+        Self {
+            cost_category: "WASM_HOST_COST".to_string(),
+            cost,
+            gas_used,
+        }
+    }
+}
+
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct ExecutionOutcomeView {
     /// Logs from this transaction or receipt.
     pub logs: Vec<String>,
@@ -805,7 +880,7 @@ impl From<ExecutionStatusView> for PartialExecutionStatus {
 impl ExecutionOutcomeView {
     // Same behavior as ExecutionOutcomeWithId's to_hashes.
     pub fn to_hashes(&self, id: CryptoHash) -> Vec<CryptoHash> {
-        let mut result = Vec::with_capacity(2 + self.logs.len());
+        let mut result = Vec::with_capacity(self.logs.len().saturating_add(2));
         result.push(id);
         result.push(CryptoHash::hash_borsh(&PartialExecutionOutcome::from(self)));
         result.extend(self.logs.iter().map(|log| hash(log.as_bytes())));
@@ -814,9 +889,17 @@ impl ExecutionOutcomeView {
 }
 
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct ExecutionOutcomeWithIdView {
-    pub proof: MerklePath,
     pub block_hash: CryptoHash,
     pub id: CryptoHash,
     pub outcome: ExecutionOutcomeView,
@@ -828,7 +911,7 @@ impl ExecutionOutcomeWithIdView {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug)]
+#[derive(BorshSerialize, BorshDeserialize, serde::Serialize, serde::Deserialize, Debug)]
 #[serde(untagged)]
 pub enum FinalExecutionOutcomeViewEnum {
     FinalExecutionOutcome(FinalExecutionOutcomeView),
@@ -845,7 +928,9 @@ impl FinalExecutionOutcomeViewEnum {
 }
 
 /// Final execution outcome of the transaction and all of subsequent the receipts.
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(
+    BorshSerialize, BorshDeserialize, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone,
+)]
 pub struct FinalExecutionOutcomeView {
     /// Execution status. Contains the result in case of successful execution.
     pub status: FinalExecutionStatus,
@@ -870,7 +955,16 @@ impl fmt::Debug for FinalExecutionOutcomeView {
 
 /// Final execution outcome of the transaction and all of subsequent the receipts. Also includes
 /// the generated receipt.
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct FinalExecutionOutcomeWithReceiptView {
     /// Final outcome view without receipts
     #[serde(flatten)]
@@ -879,7 +973,16 @@ pub struct FinalExecutionOutcomeWithReceiptView {
     pub receipts: Vec<ReceiptView>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct ReceiptView {
     pub predecessor_id: AccountId,
     pub receiver_id: AccountId,
@@ -888,14 +991,32 @@ pub struct ReceiptView {
     pub receipt: ReceiptEnumView,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct DataReceiverView {
     pub data_id: CryptoHash,
     pub receiver_id: AccountId,
 }
 
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[allow(clippy::large_enum_variant)]
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ReceiptEnumView {
     Action {
         signer_id: AccountId,
@@ -986,56 +1107,5 @@ impl TryFrom<ReceiptView> for Receipt {
                 }
             },
         })
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct GasPriceView {
-    #[serde(with = "dec_format")]
-    pub gas_price: Balance,
-}
-
-/// See crate::types::StateChangeCause for details.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum StateChangeCauseView {
-    NotWritableToDisk,
-    InitialState,
-    TransactionProcessing { tx_hash: CryptoHash },
-    ActionReceiptProcessingStarted { receipt_hash: CryptoHash },
-    ActionReceiptGasReward { receipt_hash: CryptoHash },
-    ReceiptProcessing { receipt_hash: CryptoHash },
-    PostponedReceipt { receipt_hash: CryptoHash },
-    UpdatedDelayedReceipts,
-    ValidatorAccountsUpdate,
-    Migration,
-    Resharding,
-}
-
-impl From<StateChangeCause> for StateChangeCauseView {
-    fn from(state_change_cause: StateChangeCause) -> Self {
-        match state_change_cause {
-            StateChangeCause::NotWritableToDisk => Self::NotWritableToDisk,
-            StateChangeCause::InitialState => Self::InitialState,
-            StateChangeCause::TransactionProcessing { tx_hash } => {
-                Self::TransactionProcessing { tx_hash }
-            }
-            StateChangeCause::ActionReceiptProcessingStarted { receipt_hash } => {
-                Self::ActionReceiptProcessingStarted { receipt_hash }
-            }
-            StateChangeCause::ActionReceiptGasReward { receipt_hash } => {
-                Self::ActionReceiptGasReward { receipt_hash }
-            }
-            StateChangeCause::ReceiptProcessing { receipt_hash } => {
-                Self::ReceiptProcessing { receipt_hash }
-            }
-            StateChangeCause::PostponedReceipt { receipt_hash } => {
-                Self::PostponedReceipt { receipt_hash }
-            }
-            StateChangeCause::UpdatedDelayedReceipts => Self::UpdatedDelayedReceipts,
-            StateChangeCause::ValidatorAccountsUpdate => Self::ValidatorAccountsUpdate,
-            StateChangeCause::Migration => Self::Migration,
-            StateChangeCause::Resharding => Self::Resharding,
-        }
     }
 }
