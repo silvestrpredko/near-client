@@ -6,11 +6,12 @@ use near_client::{
     prelude::*,
 };
 
+use near_primitives_core::types::AccountId;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use reqwest::Url;
 use serde_json::json;
-use workspaces::{network::Sandbox, types::SecretKey, AccountId, Worker};
+use workspaces::{network::Sandbox, types::SecretKey, Worker};
 
 // auxiliary structs and methods
 fn near_client(worker: &Worker<Sandbox>) -> NearClient {
@@ -28,7 +29,10 @@ async fn create_signer(
     let keypair = Keypair::new(sk).to_string();
     let workspaces_sk = SecretKey::from_str(&keypair).unwrap();
     let _ = worker
-        .create_tla(signer_acc_id.clone(), workspaces_sk)
+        .create_tla(
+            workspaces::AccountId::from_str(signer_acc_id).unwrap(),
+            workspaces_sk,
+        )
         .await
         .unwrap();
 

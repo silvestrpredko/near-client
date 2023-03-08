@@ -20,6 +20,7 @@ pub use ed25519_dalek::{
     SECRET_KEY_LENGTH as ED25519_SECRET_KEY_LENGTH, SIGNATURE_LENGTH as ED25519_SIGNATURE_LENGTH,
 };
 
+/// The public key wrapper around ed25519-dalek public key
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct Ed25519PublicKey(PublicKey);
 
@@ -31,6 +32,7 @@ impl Ed25519PublicKey {
             .map_err(|_| Error::Verification(signature.string()))
     }
 
+    /// Returns a key in the raw bytes
     #[inline]
     pub fn as_bytes(&self) -> &[u8; ED25519_PUBLIC_KEY_LENGTH] {
         self.0.as_bytes()
@@ -63,6 +65,13 @@ impl BorshDeserialize for Ed25519PublicKey {
         Ed25519PublicKey::try_from_bytes(temp_buf)
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))
     }
+
+    // Uncomment when up to the next version of borsh
+    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        BorshDeserialize::deserialize(&mut &buf[..])
+    }*/
 }
 
 impl BorshSerialize for Ed25519PublicKey {
@@ -94,6 +103,7 @@ impl Display for Ed25519PublicKey {
     }
 }
 
+/// The secret key wrapper around ed25519-dalek secret key
 pub struct Ed25519SecretKey(SecretKey);
 
 impl Ed25519SecretKey {
@@ -125,6 +135,7 @@ impl Ed25519SecretKey {
         Self::try_from_bytes(&expanded_key_bytes)
     }
 
+    /// Returns a key in the raw bytes
     #[inline]
     pub fn as_bytes(&self) -> &[u8; ED25519_PUBLIC_KEY_LENGTH] {
         self.0.as_bytes()
@@ -151,6 +162,13 @@ impl BorshDeserialize for Ed25519SecretKey {
         Ed25519SecretKey::try_from_bytes(std::mem::take(buf))
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))
     }
+
+    // Uncomment when up to the next version of borsh
+    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        BorshDeserialize::deserialize(&mut &buf[..])
+    }*/
 }
 
 impl BorshSerialize for Ed25519SecretKey {
@@ -159,6 +177,7 @@ impl BorshSerialize for Ed25519SecretKey {
     }
 }
 
+/// The signature wrapper around ed25519-dalek signature
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Ed25519Signature(Signature);
 
@@ -188,6 +207,13 @@ impl BorshDeserialize for Ed25519Signature {
         Ed25519Signature::try_from_bytes(temp_buf)
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))
     }
+
+    // Uncomment when up to the next version of borsh
+    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        BorshDeserialize::deserialize(&mut &buf[..])
+    }*/
 }
 
 impl BorshSerialize for Ed25519Signature {
@@ -218,6 +244,7 @@ pub struct Keypair {
 }
 
 impl Keypair {
+    /// Creates a new keypair from the [`Ed25519SecretKey`]
     pub fn new(secret_key: Ed25519SecretKey) -> Self {
         let public_key = Ed25519PublicKey::from(&secret_key);
         Self {
@@ -226,6 +253,8 @@ impl Keypair {
         }
     }
 
+    /// Creates a new keypair from the string representation
+    /// ```ed25519:5nEtNZTBUPJUwB7v9tfCgm1xfp1E7wXcZdWDpz1JwKckqG5pqstumaqRHJjtfFZMtik4TpgCVmmpvpxjEcq3CTLx```
     pub fn from_expanded_secret(expanded: &str) -> Result<Self> {
         let secret_key = Ed25519SecretKey::from_expanded(expanded)?;
         let public_key = Ed25519PublicKey::from(&secret_key);
@@ -235,18 +264,31 @@ impl Keypair {
         })
     }
 
+    /// Sign the data with a private key
     pub fn sign(&self, data: &[u8]) -> Ed25519Signature {
         self.secret_key.sign(data, &self.public_key)
     }
 
+    /// Verify the signed data
+    ///
+    /// ## Arguments
+    ///
+    /// - signature - The signature that is an output of [sign](#Keypair::sign())
+    ///
+    /// ## Returns
+    ///
+    /// - ```Ok(())```, If the signature valid
+    /// - ```Err```, if signature verification failed
     pub fn verify(&self, data: &[u8], signature: &Ed25519Signature) -> Result<()> {
         self.public_key.verify(data, signature)
     }
 
+    /// Returns the public key from the keypair
     pub fn public_key(&self) -> &Ed25519PublicKey {
         &self.public_key
     }
 
+    /// Returns the secret key from the keypair
     pub fn secret_key(&self) -> &Ed25519SecretKey {
         &self.secret_key
     }

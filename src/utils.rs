@@ -21,7 +21,7 @@ use serde_json::Value;
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum CallResult {
+pub(crate) enum CallResult {
     #[serde(rename = "result")]
     Ok(Vec<u8>),
     #[serde(rename = "error")]
@@ -29,18 +29,20 @@ pub enum CallResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ViewResult {
+pub(crate) struct ViewResult {
     #[serde(flatten)]
     pub result: CallResult,
     pub logs: Vec<String>,
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub enum ViewAccessKeyResult {
     Ok(AccessKeyView),
     Err { error: String, logs: Vec<String> },
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct ViewAccessKey {
     pub block_hash: CryptoHash,

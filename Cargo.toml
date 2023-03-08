@@ -1,6 +1,6 @@
 [package]
 name = "near-client"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["silvestr@relayz.io", "kyrylo@relayz.io"]
 repository = "https://github.com/Relayz-io/near-client"
@@ -13,18 +13,22 @@ Primarily designed for WebAssembly.
 """
 
 [dependencies]
-base64 = { version = "0.20" }
+base64 = "0.21"
 bs58 = "0.4"
 borsh = "0.9"
 curve25519-dalek = "3"
 chrono = { version = "0.4", features = ["serde"] }
 ed25519-dalek = "1"
 itertools = "0.10"
-near-primitives-core = "0.15"
+near-primitives-core = { version = "0.16" }
 near-units = "0.2"
-near-vm-errors = "3.1"
-reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+near-vm-errors = { version = "3" }
+reqwest = { version = "0.11", features = [
+    "json",
+    "rustls-tls",
+], default-features = false }
 serde = { version = "1", default-features = false, features = ["derive", "rc"] }
+strum = "0.24"
 serde_json = { version = "1", default-features = false }
 thiserror = "1"
 url = "2"

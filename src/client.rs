@@ -25,6 +25,7 @@ use crate::{
 };
 
 use crate::crypto::prelude::*;
+use base64::prelude::*;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use url::Url;
@@ -44,6 +45,7 @@ pub struct Signer {
 }
 
 impl Signer {
+    /// Creates a [`Signer`] from [`str`]
     #[allow(clippy::result_large_err)]
     pub fn from_secret_str(secret_key: &str, account_id: AccountId, nonce: Nonce) -> Result<Self> {
         Ok(Self {
@@ -53,6 +55,7 @@ impl Signer {
         })
     }
 
+    /// Creates a [`Signer`] from [`Ed25519SecretKey`]
     pub fn from_secret(secret_key: Ed25519SecretKey, account_id: AccountId, nonce: Nonce) -> Self {
         Self {
             keypair: Keypair::new(secret_key),
@@ -70,36 +73,49 @@ impl Signer {
         self.keypair.sign(data)
     }
 
+    /// Returns the [public key](Ed25519PublicKey) of a [`Signer`]
     pub fn public_key(&self) -> &Ed25519PublicKey {
         self.keypair.public_key()
     }
 
+    /// Returns the [secret key](Ed25519SecretKey) of a [`Signer`]
     pub fn secret_key(&self) -> &Ed25519SecretKey {
         self.keypair.secret_key()
     }
 
+    /// Returns an [account](AccountId) of a [`Signer`]
     pub fn account(&self) -> &AccountId {
         &self.account_id
     }
 
+    /// Returns the key nonce
     pub fn nonce(&self) -> Nonce {
         self.nonce.load(Ordering::Acquire)
     }
 
+    /// Update the key nonce
     pub fn update_nonce(&self, nonce: Nonce) {
         self.nonce.store(nonce, Ordering::Release);
     }
 
+    /// Increment the key nonce.
+    /// Function is thread safe
     pub fn increment_nonce(&self, value: u64) {
         self.nonce.fetch_add(value, Ordering::AcqRel);
     }
 }
 
+/// Near RPC client
 pub struct NearClient {
     pub(crate) rpc_client: RpcClient,
 }
 
 impl NearClient {
+    /// Creates a new client
+    ///
+    /// ## Arguments
+    ///
+    /// - url - A RPC Endpoint [Url](https://docs.near.org/api/rpc/providers)
     #[allow(clippy::result_large_err)]
     pub fn new(url: Url) -> Result<Self> {
         Ok(Self {
@@ -134,6 +150,7 @@ impl NearClient {
         method: &'static str,
         args: Option<Value>,
     ) -> Result<ViewOutput<T>> {
+        let args = BASE64_STANDARD_NO_PAD.encode(serialize_arguments(args)?);
         self.rpc_client
             .request(
                 "query",
@@ -142,7 +159,7 @@ impl NearClient {
                     "finality": finality,
                     "account_id": contract_id,
                     "method_name": method,
-                    "args_base64": base64::encode(serialize_arguments(args)?)
+                    "args_base64": args
                 })),
             )
             .await
@@ -247,6 +264,13 @@ impl NearClient {
         FunctionCallBuilder::new(transaction_info, method)
     }
 
+    /// Deploys contract code to the chain
+    ///
+    /// ## Arguments
+    ///
+    /// - signer - Transaction [`Signer`]
+    /// - contract_id - The [`AccountId`] where smart contract is located
+    /// - wasm - Actually a compiled code
     pub fn deploy_contract<'a>(
         &'a self,
         signer: &'a Signer,
@@ -259,6 +283,14 @@ impl NearClient {
         }
     }
 
+    /// Creates account
+    ///
+    /// ## Arguments
+    ///
+    /// - signer - Transaction [`Signer`]
+    /// - new_account_id - The new [`AccountId`]
+    /// - new_account_pk - The new [`Ed25519PublicKey`]
+    /// - amount - Initial balance of that account, could be zero
     pub fn create_account<'a>(
         &'a self,
         signer: &'a Signer,
@@ -283,6 +315,13 @@ impl NearClient {
         FunctionCall { info, actions }
     }
 
+    /// Deletes account
+    ///
+    /// ## Arguments
+    ///
+    /// - signer - Transaction [`Signer`]
+    /// - account_id - The [`AccountId`] that we own and want to delete
+    /// - beneficiary_acc_id - Where to return a founds from the deleted account
     pub fn delete_account<'a>(
         &'a self,
         signer: &'a Signer,
@@ -299,6 +338,8 @@ impl NearClient {
     }
 }
 
+/// Output of a view contract call
+/// Contains the return data and logs
 #[derive(Debug)]
 pub struct ViewOutput<T: DeserializeOwned> {
     logs: Vec<String>,
@@ -358,6 +399,7 @@ impl Output {
     }
 }
 
+#[doc(hidden)]
 pub struct FunctionCallBuilder<'a> {
     info: TransactionInfo<'a>,
     deposit: Balance,
@@ -421,6 +463,7 @@ impl<'a> FunctionCallBuilder<'a> {
     }
 }
 
+#[doc(hidden)]
 pub struct FunctionCall<'a> {
     info: TransactionInfo<'a>,
     actions: Vec<Action>,
@@ -430,16 +473,13 @@ impl<'a> FunctionCall<'a> {
     /// Sends a transaction and waits until transaction is fully complete. (Has a 10 second timeout)
     /// Also, possible that an output data will be empty if the transaction is still executing
     pub async fn commit(self, block_finality: Finality) -> Result<Output> {
-        let transaction_bytes =
-            serialize_transaction(&self.info, self.actions, block_finality).await?;
+        let transaction_bytes = BASE64_STANDARD_NO_PAD
+            .encode(serialize_transaction(&self.info, self.actions, block_finality).await?);
 
         let execution_outcome = self
             .info
             .rpc()
-            .request(
-                "broadcast_tx_commit",
-                Some(json!(vec![base64::encode(transaction_bytes)])),
-            )
+            .request("broadcast_tx_commit", Some(json!(vec![transaction_bytes])))
             .await
             .map_err(Error::CommitTransaction)
             .and_then(|execution_outcome| {
@@ -452,14 +492,11 @@ impl<'a> FunctionCall<'a> {
 
     /// Sends a transaction and immediately returns transaction hash.
     pub async fn commit_async(self, block_finality: Finality) -> Result<CryptoHash> {
-        let transaction_bytes =
-            serialize_transaction(&self.info, self.actions, block_finality).await?;
+        let transaction_bytes = BASE64_STANDARD_NO_PAD
+            .encode(serialize_transaction(&self.info, self.actions, block_finality).await?);
         self.info
             .rpc()
-            .request(
-                "broadcast_tx_async",
-                Some(json!(vec![base64::encode(transaction_bytes)])),
-            )
+            .request("broadcast_tx_async", Some(json!(vec![transaction_bytes])))
             .await
             .map_err(Error::CommitAsyncTransaction)
             .and_then(|id| {

@@ -15,9 +15,13 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use curve25519_dalek::edwards::CompressedEdwardsY;
 use x25519_dalek::{PublicKey as DalekPublicKey, StaticSecret};
 
+/// The public key size for Diffie-Hellman
 pub const PUBLIC_KEY_LENGTH: usize = 32_usize;
+/// The secret key size for Diffie-Hellman
 pub const SECRET_KEY_LENGTH: usize = 32_usize;
 
+/// The secret key for Diffie-Hellman
+/// Basically it's a wrapper on a x25519-dalek
 pub struct SecretKey(StaticSecret);
 
 impl BorshSerialize for SecretKey {
@@ -32,8 +36,16 @@ impl BorshDeserialize for SecretKey {
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))?;
         Ok(secret_key)
     }
+
+    // Uncomment when up to the next version of borsh
+    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        Self::deserialize(&mut &buf[..])
+    }*/
 }
 
+/// The public key for Diffie-Hellman
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct PublicKey(DalekPublicKey);
 
@@ -49,6 +61,13 @@ impl BorshDeserialize for PublicKey {
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))?;
         Ok(public_key)
     }
+
+    // Uncomment when up to the next version of borsh
+    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        Self::deserialize(&mut &buf[..])
+    }*/
 }
 
 impl Display for PublicKey {

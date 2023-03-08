@@ -1,14 +1,15 @@
 use super::errors::TxExecutionError;
 use crate::crypto::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
+use bs58::encode as to_base58;
 use serde::{Deserialize, Serialize};
 
 use near_primitives_core::{
     account::AccessKey,
     hash::{hash, CryptoHash},
-    profile::ProfileData,
-    serialize::{base64_format, dec_format, to_base58},
-    types::{AccountId, Balance, Gas, Nonce},
+    profile::{ProfileDataV2, ProfileDataV3},
+    serialize::{base64_format, dec_format},
+    types::{AccountId, Balance, BlockHeight, Gas, Nonce},
 };
 
 use std::{
@@ -60,6 +61,7 @@ pub enum Action {
     AddKey(AddKeyAction),
     DeleteKey(DeleteKeyAction),
     DeleteAccount(DeleteAccountAction),
+    Delegate(SignedDelegateAction),
 }
 
 impl Action {
@@ -76,6 +78,42 @@ impl Action {
             _ => 0,
         }
     }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct DelegateAction {
+    /// Signer of the delegated actions
+    pub sender_id: AccountId,
+    /// Receiver of the delegated actions.
+    pub receiver_id: AccountId,
+    /// List of actions to be executed.
+    ///
+    /// With the meta transactions MVP defined in NEP-366, nested
+    /// DelegateActions are not allowed. A separate type is used to enforce it.
+    pub actions: Vec<NonDelegateAction>,
+    /// Nonce to ensure that the same delegate action is not sent twice by a
+    /// relayer and should match for given account's `public_key`.
+    /// After this action is processed it will increment.
+    pub nonce: Nonce,
+    /// The maximal height of the block in the blockchain below which the given DelegateAction is valid.
+    pub max_block_height: BlockHeight,
+    /// Public key used to sign this delegated action.
+    pub public_key: Ed25519PublicKey,
+}
+
+#[derive(Serialize, BorshSerialize, BorshDeserialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct NonDelegateAction(Action);
+
+impl From<NonDelegateAction> for Action {
+    fn from(action: NonDelegateAction) -> Self {
+        action.0
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct SignedDelegateAction {
+    pub delegate_action: DelegateAction,
+    pub signature: Ed25519Signature,
 }
 
 /// Create account action
@@ -128,7 +166,10 @@ impl fmt::Debug for FunctionCallAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FunctionCallAction")
             .field("method_name", &format_args!("{}", &self.method_name))
-            .field("args", &format_args!("{}", to_base58(&self.args)))
+            .field(
+                "args",
+                &format_args!("{}", to_base58(&self.args).into_string()),
+            )
             .field("gas", &format_args!("{}", &self.gas))
             .field("deposit", &format_args!("{}", &self.deposit))
             .finish()
@@ -277,7 +318,7 @@ impl fmt::Debug for ExecutionStatus {
             ExecutionStatus::Unknown => f.write_str("Unknown"),
             ExecutionStatus::Failure(e) => f.write_fmt(format_args!("Failure({e})")),
             ExecutionStatus::SuccessValue(v) => {
-                f.write_fmt(format_args!("SuccessValue({})", to_base58(v)))
+                f.write_fmt(format_args!("SuccessValue({})", to_base58(v).into_string()))
             }
             ExecutionStatus::SuccessReceiptId(receipt_id) => {
                 f.write_fmt(format_args!("SuccessReceiptId({receipt_id})"))
@@ -366,14 +407,21 @@ impl Default for ExecutionOutcome {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Clone, Eq, Debug, Default)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Clone, Eq, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ExecutionMetadata {
-    // V1: Empty Metadata
-    #[default]
+    /// V1: Empty Metadata
     V1,
+    /// V2: With ProfileData by legacy `Cost` enum
+    V2(ProfileDataV2),
+    // V3: With ProfileData by gas parameters
+    V3(ProfileDataV3),
+}
 
-    // V2: With ProfileData
-    V2(ProfileData),
+impl Default for ExecutionMetadata {
+    fn default() -> Self {
+        Self::V1
+    }
 }
 
 impl fmt::Debug for ExecutionOutcome {

@@ -6,9 +6,11 @@ use std::{borrow::Borrow, collections::HashMap, fmt, hash::Hash};
 
 use near_primitives_core::{
     hash::CryptoHash,
-    serialize::{dec_format, option_base64_format, to_base58},
+    serialize::{dec_format, option_base64_format},
     types::{AccountId, Balance, ShardId},
 };
+
+use bs58::encode as to_base58;
 
 /// Receipts are used for a cross-shard communication.
 /// Receipts could be 2 types (determined by a `ReceiptEnum`): `ReceiptEnum::Action` of `ReceiptEnum::Data`.
@@ -130,7 +132,13 @@ impl fmt::Debug for DataReceipt {
             .field("data_id", &self.data_id)
             .field(
                 "data",
-                &format_args!("{:?}", self.data.as_deref().map(to_base58)),
+                &format_args!(
+                    "{:?}",
+                    self.data
+                        .as_deref()
+                        .map(to_base58)
+                        .map(|it| it.into_string())
+                ),
             )
             .finish()
     }
@@ -160,7 +168,13 @@ impl fmt::Debug for ReceivedData {
         f.debug_struct("ReceivedData")
             .field(
                 "data",
-                &format_args!("{:?}", self.data.as_deref().map(to_base58)),
+                &format_args!(
+                    "{:?}",
+                    self.data
+                        .as_deref()
+                        .map(to_base58)
+                        .map(|it| it.into_string())
+                ),
             )
             .finish()
     }
