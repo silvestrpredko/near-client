@@ -66,12 +66,11 @@ impl BorshDeserialize for Ed25519PublicKey {
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))
     }
 
-    // Uncomment when up to the next version of borsh
-    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         BorshDeserialize::deserialize(&mut &buf[..])
-    }*/
+    }
 }
 
 impl BorshSerialize for Ed25519PublicKey {
@@ -163,12 +162,11 @@ impl BorshDeserialize for Ed25519SecretKey {
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))
     }
 
-    // Uncomment when up to the next version of borsh
-    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         BorshDeserialize::deserialize(&mut &buf[..])
-    }*/
+    }
 }
 
 impl BorshSerialize for Ed25519SecretKey {
@@ -208,12 +206,11 @@ impl BorshDeserialize for Ed25519Signature {
             .map_err(|err| IoError::new(ErrorKind::InvalidData, err))
     }
 
-    // Uncomment when up to the next version of borsh
-    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         BorshDeserialize::deserialize(&mut &buf[..])
-    }*/
+    }
 }
 
 impl BorshSerialize for Ed25519Signature {
