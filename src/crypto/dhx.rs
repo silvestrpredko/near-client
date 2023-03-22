@@ -37,12 +37,11 @@ impl BorshDeserialize for SecretKey {
         Ok(secret_key)
     }
 
-    // Uncomment when up to the next version of borsh
-    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         Self::deserialize(&mut &buf[..])
-    }*/
+    }
 }
 
 /// The public key for Diffie-Hellman
@@ -62,12 +61,11 @@ impl BorshDeserialize for PublicKey {
         Ok(public_key)
     }
 
-    // Uncomment when up to the next version of borsh
-    /*fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         Self::deserialize(&mut &buf[..])
-    }*/
+    }
 }
 
 impl Display for PublicKey {
