@@ -1,9 +1,8 @@
 use std::{fs::write, str::FromStr};
 
 use near_client::{
-    crypto::prelude::*,
-    near_primitives_light::{types::Finality, views::AccessKeyView},
-    prelude::*,
+    crypto::prelude::*, near_primitives_light::types::Finality, prelude::*, Error,
+    ViewAccessKeyCall,
 };
 
 use near_primitives_core::types::AccountId;
@@ -41,12 +40,7 @@ async fn create_signer(
         .await
         .unwrap();
 
-    match view_access_key.result {
-        ViewAccessKeyResult::Ok(AccessKeyView { nonce, .. }) => {
-            Signer::from_secret_str(&keypair, signer_acc_id.clone(), nonce).unwrap()
-        }
-        ViewAccessKeyResult::Err { error, .. } => panic!("{error}"),
-    }
+    Signer::from_secret_str(&keypair, signer_acc_id.clone(), view_access_key.nonce).unwrap()
 }
 
 async fn download_contract() -> Vec<u8> {
@@ -317,17 +311,10 @@ async fn view_access_key_success() {
         .unwrap()
         .output::<serde_json::Value>();
 
-    let access_key = client
+    let _ = client
         .view_access_key(&new_acc, &pk, Finality::None)
         .await
         .unwrap();
-    assert!(matches!(
-        access_key,
-        ViewAccessKey {
-            result: ViewAccessKeyResult::Ok { .. },
-            ..
-        }
-    ));
 }
 
 #[tokio::test]
@@ -339,16 +326,14 @@ async fn view_access_key_failure() {
     let secret_key = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
     let pk = Ed25519PublicKey::from(&secret_key);
 
-    let access_key = client
+    let access_key_err = client
         .view_access_key(&new_acc, &pk, Finality::None)
         .await
-        .unwrap();
+        .unwrap_err();
+
     assert!(matches!(
-        access_key,
-        ViewAccessKey {
-            result: ViewAccessKeyResult::Err { .. },
-            ..
-        }
+        access_key_err,
+        Error::ViewAccessKeyCall(ViewAccessKeyCall::ParseError { .. })
     ));
 }
 
@@ -370,17 +355,10 @@ async fn create_account() {
         .unwrap()
         .output::<serde_json::Value>();
 
-    let access_key = client
+    let _ = client
         .view_access_key(&new_acc, &pk, Finality::None)
         .await
         .unwrap();
-    assert!(matches!(
-        access_key,
-        ViewAccessKey {
-            result: ViewAccessKeyResult::Ok { .. },
-            ..
-        }
-    ));
 }
 
 #[tokio::test]
@@ -405,17 +383,7 @@ async fn delete_account() {
         .await
         .unwrap();
 
-    let nonce = if let ViewAccessKey {
-        result: ViewAccessKeyResult::Ok(AccessKeyView { nonce, .. }),
-        ..
-    } = access_key
-    {
-        nonce
-    } else {
-        panic!("Can't view access key for just created account")
-    };
-
-    let acc_signer = Signer::from_secret(secret_key, new_acc.clone(), nonce);
+    let acc_signer = Signer::from_secret(secret_key, new_acc.clone(), access_key.nonce);
 
     client
         .delete_account(&acc_signer, &new_acc, &signer_account_id)
@@ -423,16 +391,14 @@ async fn delete_account() {
         .await
         .unwrap();
 
-    let access_key = client
+    let access_key_err = client
         .view_access_key(&new_acc, &pk, Finality::None)
         .await
-        .unwrap();
+        .unwrap_err();
+
     assert!(matches!(
-        access_key,
-        ViewAccessKey {
-            result: ViewAccessKeyResult::Err { .. },
-            ..
-        }
+        access_key_err,
+        Error::ViewAccessKeyCall(ViewAccessKeyCall::ParseError { .. })
     ));
 }
 

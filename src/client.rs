@@ -1,12 +1,17 @@
-use crate::near_primitives_light::{
-    transaction::{
-        Action, AddKeyAction, CreateAccountAction, DeleteAccountAction, DeployContractAction,
-        FunctionCallAction, TransferAction,
+use crate::{
+    near_primitives_light::{
+        transaction::{
+            Action, AddKeyAction, CreateAccountAction, DeleteAccountAction, DeployContractAction,
+            FunctionCallAction, TransferAction,
+        },
+        types::Finality,
+        views::{
+            AccessKeyView, BlockView, ExecutionOutcomeWithIdView, FinalExecutionOutcomeView,
+            FinalExecutionStatus,
+        },
     },
-    types::Finality,
-    views::{
-        BlockView, ExecutionOutcomeWithIdView, FinalExecutionOutcomeView, FinalExecutionStatus,
-    },
+    utils::ViewAccessKeyResult,
+    ViewAccessKeyCall,
 };
 
 use near_primitives_core::{
@@ -189,7 +194,7 @@ impl NearClient {
         account_id: &'a AccountId,
         public_key: &'a Ed25519PublicKey,
         finality: Finality,
-    ) -> Result<ViewAccessKey> {
+    ) -> Result<AccessKeyView> {
         self.rpc_client
             .request(
                 "query",
@@ -201,10 +206,19 @@ impl NearClient {
                 })),
             )
             .await
-            .map_err(Error::ViewAccessKeyCall)
+            .map_err(|err| Error::ViewAccessKeyCall(ViewAccessKeyCall::Rpc(err)))
             .and_then(|it| {
                 serde_json::from_value::<ViewAccessKey>(it)
                     .map_err(Error::DeserializeAccessKeyViewCall)
+            })
+            .and_then(|view_access_key| match view_access_key.result {
+                ViewAccessKeyResult::Ok(access_key_view) => Ok(access_key_view),
+                ViewAccessKeyResult::Err { error, logs } => {
+                    Err(Error::ViewAccessKeyCall(ViewAccessKeyCall::ParseError {
+                        error,
+                        logs,
+                    }))
+                }
             })
     }
 
