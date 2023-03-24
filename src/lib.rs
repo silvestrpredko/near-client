@@ -10,6 +10,8 @@ pub(crate) mod rpc;
 #[doc(hidden)]
 pub mod utils;
 
+use std::fmt::Display;
+
 pub use near_primitives_core as core;
 pub use near_units;
 
@@ -22,7 +24,7 @@ pub mod prelude {
     pub use super::crypto::prelude::*;
     pub use super::near_primitives_light::types::Finality;
     pub use super::utils::*;
-    pub use near_primitives_core::types::AccountId;
+    pub use near_primitives_core::types::{AccountId, Balance, Gas, Nonce};
 }
 
 /// Describes errors that could be thrown during execution.
@@ -64,7 +66,7 @@ pub enum Error {
     BlockCall(rpc::Error),
     #[doc(hidden)]
     #[error("Access key call failed with an error: \"{0}\"")]
-    ViewAccessKeyCall(rpc::Error),
+    ViewAccessKeyCall(ViewAccessKeyCall),
     #[doc(hidden)]
     #[error("View call failed with an error: \"{0}\"")]
     ViewCall(rpc::Error),
@@ -89,4 +91,31 @@ pub enum Error {
     #[doc(hidden)]
     #[error("Can't deserialize an access key response, cause: [\"{0}\"]")]
     DeserializeAccessKeyViewCall(serde_json::Error),
+}
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub enum ViewAccessKeyCall {
+    Rpc(rpc::Error),
+    ParseError { error: String, logs: Vec<String> },
+}
+
+#[doc(hidden)]
+impl Display for ViewAccessKeyCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rpc(err) => {
+                write!(f, "Rpc error: {err}")
+            }
+            Self::ParseError { error, logs } => write!(f, "Error during parsing: {error},")
+                .and(write!(f, "with logs: "))
+                .and(writeln!(
+                    f,
+                    "{}",
+                    logs.iter().fold(String::new(), |init, next| {
+                        init + format!("{next}\n").as_str()
+                    })
+                )),
+        }
+    }
 }

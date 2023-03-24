@@ -50,15 +50,6 @@ pub struct ViewAccessKey {
     pub result: ViewAccessKeyResult,
 }
 
-impl From<ViewAccessKey> for std::result::Result<Nonce, String> {
-    fn from(view: ViewAccessKey) -> Self {
-        match view.result {
-            ViewAccessKeyResult::Ok(AccessKeyView { nonce, .. }) => Ok(nonce),
-            ViewAccessKeyResult::Err { error, .. } => Err(error),
-        }
-    }
-}
-
 pub(crate) struct TransactionInfo<'a> {
     client: &'a NearClient,
     signer: &'a Signer,
