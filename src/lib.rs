@@ -35,11 +35,14 @@ pub enum Error {
     #[error("Failed to create a signer, cause [\"{0}\"]")]
     CreateSigner(crypto::Error),
     #[doc(hidden)]
-    #[error("Transaction not started")]
-    TxNotStarted,
+    #[error("Transaction not started, logs: [\"{0:?}\"]")]
+    TxNotStarted(Box<Vec<String>>),
     #[doc(hidden)]
-    #[error("Transaction failed during execution, cause [\"{0:?}\"]")]
-    TxExecution(near_primitives_light::errors::TxExecutionError),
+    #[error("Transaction failed during execution, cause [\"{0:?}\"], logs: [\"{1:?}\"]")]
+    TxExecution(
+        near_primitives_light::errors::TxExecutionError,
+        Box<Vec<String>>,
+    ),
     #[doc(hidden)]
     #[error("Transaction serialization error: [\"{0}\"]")]
     TxSerialization(std::io::Error),
