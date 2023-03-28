@@ -1,5 +1,6 @@
 use std::{fs::write, str::FromStr};
 
+use itertools::Itertools;
 use near_client::{
     crypto::prelude::*, near_primitives_light::types::Finality, prelude::*, Error,
     ViewAccessKeyCall,
@@ -335,6 +336,91 @@ async fn view_access_key_failure() {
         access_key_err,
         Error::ViewAccessKeyCall(ViewAccessKeyCall::ParseError { .. })
     ));
+}
+
+#[tokio::test]
+async fn view_contract_state() {
+    use base64::{engine::general_purpose, Engine as _};
+
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
+    let signer = create_signer(&worker, &client, &signer_account_id).await;
+    let wasm = download_contract().await;
+
+    client
+        .deploy_contract(&signer, &signer_account_id, wasm)
+        .commit(Finality::Final)
+        .await
+        .unwrap();
+
+    client
+        .function_call(&signer, &signer_account_id, "new_default_meta")
+        .args(json!({
+            "owner_id": &signer_account_id,
+            "total_supply": "100",
+        }))
+        .gas(near_units::parse_gas!("300 T") as u64)
+        .commit(Finality::Final)
+        .await
+        .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    let state = client
+        .view_contract_state(&signer_account_id)
+        .await
+        .map(|state| {
+            state
+                .values
+                .into_iter()
+                .map(|state_item| {
+                    (
+                        general_purpose::STANDARD_NO_PAD.encode(state_item.key),
+                        general_purpose::STANDARD_NO_PAD.encode(state_item.value),
+                    )
+                })
+                .collect_vec()
+        })
+        .unwrap();
+
+    assert_eq!(
+        state[0],
+        (
+            "U1RBVEU".to_owned(),
+            "AQAAAGFkAAAAAAAAAAAAAAAAAAAAfQAAAAAAAAABAAAAbQ".to_owned()
+        )
+    );
+
+    assert_eq!(
+        state[1],
+        (
+            "YQ8AAABhbGljZS50ZXN0Lm5lYXI".to_owned(),
+            "ZAAAAAAAAAAAAAAAAAAAAA".to_owned()
+        )
+    );
+
+    assert_eq!(
+        state[2],
+        (
+            "bQ".to_owned(),
+            "CAAAAGZ0LTEuMC4wGwAAAEV4YW1wbGUgTkVBUiBmdW5naWJsZSB0b2tlbgcA\
+            AABFWEFNUExFAX0CAABkYXRhOmltYWdlL3N2Zyt4bWwsJTNDc3ZnIHhtbG5zPSd\
+            odHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Zycgdmlld0JveD0nMCAwIDI4OCAyODgnJ\
+            TNFJTNDZyBpZD0nbCcgZGF0YS1uYW1lPSdsJyUzRSUzQ3BhdGggZD0nTTE4Ny41OCw3OS\
+            44MWwtMzAuMSw0NC42OWEzLjIsMy4yLDAsMCwwLDQuNzUsNC4yTDE5MS44NiwxMDNhMS4yL\
+            DEuMiwwLDAsMSwyLC45MXY4MC40NmExLjIsMS4yLDAsMCwxLTIuMTIuNzdMMTAyLjE4LDc3L\
+            jkzQTE1LjM1LDE1LjM1LDAsMCwwLDkwLjQ3LDcyLjVIODcuMzRBMTUuMzQsMTUuMzQsMCwwL\
+            DAsNzIsODcuODRWMjAxLjE2QTE1LjM0LDE1LjM0LDAsMCwwLDg3LjM0LDIxNi41aDBhMTUuM\
+            zUsMTUuMzUsMCwwLDAsMTMuMDgtNy4zMWwzMC4xLTQ0LjY5YTMuMiwzLjIsMCwwLDAtNC43N\
+            S00LjJMOTYuMTQsMTg2YTEuMiwxLjIsMCwwLDEtMi0uOTFWMTA0LjYxYTEuMiwxLjIsMCwwL\
+            DEsMi4xMi0uNzdsODkuNTUsMTA3LjIzYTE1LjM1LDE1LjM1LDAsMCwwLDExLjcxLDUuNDNoMy\
+            4xM0ExNS4zNCwxNS4zNCwwLDAsMCwyMTYsMjAxLjE2Vjg3Ljg0QTE1LjM0LDE1LjM0LDAsMCww\
+            LDIwMC42Niw3Mi41aDBBMTUuMzUsMTUuMzUsMCwwLDAsMTg3LjU4LDc5LjgxWicvJTNFJTNDL2c\
+            lM0UlM0Mvc3ZnJTNFAAAY"
+                .to_owned()
+        )
+    );
 }
 
 #[tokio::test]
