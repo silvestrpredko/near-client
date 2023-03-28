@@ -10,7 +10,7 @@ use crate::{
             FinalExecutionStatus,
         },
     },
-    utils::ViewAccessKeyResult,
+    utils::{ViewAccessKeyResult, ViewStateResult},
     ViewAccessKeyCall,
 };
 
@@ -189,10 +189,10 @@ impl NearClient {
     ///
     /// - account_id - The user [`AccountId`] in a Near network
     /// - public_key - The user [`Ed25519PublicKey`] in a Near network
-    pub async fn view_access_key<'a>(
-        &'a self,
-        account_id: &'a AccountId,
-        public_key: &'a Ed25519PublicKey,
+    pub async fn view_access_key(
+        &self,
+        account_id: &AccountId,
+        public_key: &Ed25519PublicKey,
         finality: Finality,
     ) -> Result<AccessKeyView> {
         self.rpc_client
@@ -219,6 +219,30 @@ impl NearClient {
                         logs,
                     }))
                 }
+            })
+    }
+
+    /// Returns information regarding contract state
+    /// in a key-value sequence representation
+    ///
+    /// Arguments
+    ///
+    /// - account_id - The contract [`AccountId`] in a Near network
+    pub async fn view_contract_state(&self, account_id: &AccountId) -> Result<ViewStateResult> {
+        self.rpc_client
+            .request(
+                "query",
+                Some(json!({
+                    "request_type": "view_state",
+                    "finality": Finality::Final,
+                    "account_id": account_id,
+                    "prefix_base64": ""
+                })),
+            )
+            .await
+            .map_err(Error::ViewCall)
+            .and_then(|it| {
+                serde_json::from_value::<ViewStateResult>(it).map_err(Error::DeserializeViewCall)
             })
     }
 

@@ -11,6 +11,7 @@ use crate::{
 use near_primitives_core::{
     account::id::AccountId,
     hash::CryptoHash,
+    serialize::base64_format,
     types::{BlockHeight, Nonce},
 };
 use serde::{
@@ -48,6 +49,32 @@ pub struct ViewAccessKey {
     pub block_hash: CryptoHash,
     pub block_height: BlockHeight,
     pub result: ViewAccessKeyResult,
+}
+
+/// A single record in a contract
+/// that consist of key and value
+///
+/// # Examples
+///
+/// ```
+/// use near_sdk::collections::LookupMap;
+/// let mut map: LookupMap<String, String> = LookupMap::new(b"m");
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StateItem {
+    /// Key in a binary format
+    #[serde(with = "base64_format")]
+    pub key: Vec<u8>,
+    /// Value in a binary format
+    #[serde(with = "base64_format")]
+    pub value: Vec<u8>,
+}
+
+/// View contract state
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewStateResult {
+    /// Records in a contract storage
+    pub values: Vec<StateItem>,
 }
 
 pub(crate) struct TransactionInfo<'a> {
