@@ -529,13 +529,13 @@ pub(crate) fn proceed_outcome(
     let logs = extract_logs(execution_outcome.receipts_outcome);
 
     match execution_outcome.status {
-        FinalExecutionStatus::Failure(err) => Err(Error::TxExecution(err)),
+        FinalExecutionStatus::Failure(err) => Err(Error::TxExecution(err, Box::new(logs))),
         FinalExecutionStatus::SuccessValue(data) => Ok(Output {
             transaction,
             logs,
             data,
         }),
-        FinalExecutionStatus::NotStarted => Err(Error::TxNotStarted),
+        FinalExecutionStatus::NotStarted => Err(Error::TxNotStarted(Box::new(logs))),
         FinalExecutionStatus::Started => Ok(Output {
             transaction,
             logs,
