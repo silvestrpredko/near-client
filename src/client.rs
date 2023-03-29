@@ -399,7 +399,7 @@ impl Output {
     #[allow(clippy::misnamed_getters)]
     /// Returns a transaction id
     pub fn id(&self) -> CryptoHash {
-        self.transaction.block_hash
+        self.transaction.id
     }
 
     /// Amount of gas that was burnt during transaction execution
