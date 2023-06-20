@@ -1,7 +1,10 @@
 use crate::near_primitives_light::{
     transaction::{Action, SignedTransaction, Transaction},
     types::Finality,
-    views::{AccessKeyPermissionView, AccessKeyView, ExecutionOutcomeWithIdView},
+    views::{
+        AccessKeyListView, AccessKeyPermissionView, AccessKeyView, ExecutionOutcomeWithIdView,
+        KeysView,
+    },
 };
 use crate::{
     client::{NearClient, Signer},
@@ -11,7 +14,6 @@ use crate::{
 use near_primitives_core::{
     account::id::AccountId,
     hash::CryptoHash,
-    serialize::base64_format,
     types::{BlockHeight, Nonce},
 };
 use serde::{
@@ -19,6 +21,7 @@ use serde::{
     Deserialize, Serialize,
 };
 use serde_json::Value;
+use serde_with::{base64::Base64, serde_as};
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +54,21 @@ pub struct ViewAccessKey {
     pub result: ViewAccessKeyResult,
 }
 
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub enum ViewAccessKeyListResult {
+    Ok(AccessKeyListView),
+    Err { error: String, logs: Vec<String> },
+}
+
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct ViewAccessKeyList {
+    pub block_hash: CryptoHash,
+    pub block_height: BlockHeight,
+    pub result: ViewAccessKeyListResult,
+}
+
 /// A single record in a contract
 /// that consist of key and value
 ///
@@ -60,13 +78,14 @@ pub struct ViewAccessKey {
 /// use near_sdk::collections::LookupMap;
 /// let mut map: LookupMap<String, String> = LookupMap::new(b"m");
 /// ```
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateItem {
     /// Key in a binary format
-    #[serde(with = "base64_format")]
+    #[serde_as(as = "Base64")]
     pub key: Vec<u8>,
     /// Value in a binary format
-    #[serde(with = "base64_format")]
+    #[serde_as(as = "Base64")]
     pub value: Vec<u8>,
 }
 
@@ -157,93 +176,188 @@ pub(crate) fn sign_transaction(signer: &Signer, transaction: Transaction) -> Sig
     SignedTransaction::new(signature, transaction)
 }
 
+impl AccessKeyVisitor for ViewAccessKey {
+    fn visit_map<'de, Map>(
+        mut map: Map,
+        block_hash: CryptoHash,
+        block_height: BlockHeight,
+    ) -> std::result::Result<Self, Map::Error>
+    where
+        Self: std::marker::Sized,
+        Map: de::MapAccess<'de>,
+    {
+        let next_key = map.next_key::<String>()?;
+
+        match next_key.as_deref() {
+            Some("nonce") => {
+                let nonce = map.next_value::<Nonce>()?;
+                let permission = map
+                    .next_entry::<String, AccessKeyPermissionView>()?
+                    .ok_or_else(|| de::Error::missing_field("permission"))
+                    .and_then(|(key, permission)| {
+                        if key != "permission" {
+                            Err(serde::de::Error::unknown_field(&key, &["permission"]))
+                        } else {
+                            Ok(permission)
+                        }
+                    })?;
+
+                Ok(ViewAccessKey {
+                    block_hash,
+                    block_height,
+                    result: ViewAccessKeyResult::Ok(AccessKeyView { nonce, permission }),
+                })
+            }
+            Some("error") => {
+                let error = map.next_value::<String>()?;
+                let logs = map
+                    .next_entry::<String, Vec<String>>()?
+                    .ok_or_else(|| serde::de::Error::missing_field("logs"))
+                    .and_then(|(key, logs)| {
+                        if key != "logs" {
+                            Err(serde::de::Error::unknown_field(&key, &["logs"]))
+                        } else {
+                            Ok(logs)
+                        }
+                    })?;
+
+                Ok(ViewAccessKey {
+                    block_hash,
+                    block_height,
+                    result: ViewAccessKeyResult::Err { error, logs },
+                })
+            }
+            Some(field) => Err(serde::de::Error::unknown_field(field, &["nonce", "error"])),
+            None => Err(serde::de::Error::missing_field("nonce or error")),
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for ViewAccessKey {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        struct Visit;
+        deserializer.deserialize_map(Visit::<ViewAccessKey>::new())
+    }
+}
 
-        impl<'de> Visitor<'de> for Visit {
-            type Value = ViewAccessKey;
+impl AccessKeyVisitor for ViewAccessKeyList {
+    fn visit_map<'de, Map>(
+        mut map: Map,
+        block_hash: CryptoHash,
+        block_height: BlockHeight,
+    ) -> std::result::Result<Self, Map::Error>
+    where
+        Self: std::marker::Sized,
+        Map: de::MapAccess<'de>,
+    {
+        let next_key = map.next_key::<String>()?;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(formatter, "Expecting an key-value map")
+        match next_key.as_deref() {
+            Some("keys") => {
+                let keys = map.next_value::<Vec<KeysView>>()?;
+
+                Ok(ViewAccessKeyList {
+                    block_hash,
+                    block_height,
+                    result: ViewAccessKeyListResult::Ok(AccessKeyListView { keys }),
+                })
             }
-
-            fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let block_hash = map
-                    .next_entry::<String, CryptoHash>()?
-                    .ok_or_else(|| de::Error::missing_field("block_hash"))
-                    .and_then(|(key, block_hash)| {
-                        if key != "block_hash" {
-                            Err(serde::de::Error::unknown_field(&key, &["block_hash"]))
+            Some("error") => {
+                let error = map.next_value::<String>()?;
+                let logs = map
+                    .next_entry::<String, Vec<String>>()?
+                    .ok_or_else(|| serde::de::Error::missing_field("logs"))
+                    .and_then(|(key, logs)| {
+                        if key != "logs" {
+                            Err(serde::de::Error::unknown_field(&key, &["logs"]))
                         } else {
-                            Ok(block_hash)
+                            Ok(logs)
                         }
                     })?;
 
-                let block_height = map
-                    .next_entry::<String, BlockHeight>()?
-                    .ok_or_else(|| de::Error::missing_field("block_height"))
-                    .and_then(|(key, block_hash)| {
-                        if key != "block_height" {
-                            Err(serde::de::Error::unknown_field(&key, &["block_height"]))
-                        } else {
-                            Ok(block_hash)
-                        }
-                    })?;
-
-                let next_key = map.next_key::<String>()?;
-
-                match next_key.as_deref() {
-                    Some("nonce") => {
-                        let nonce = map.next_value::<Nonce>()?;
-                        let permission = map
-                            .next_entry::<String, AccessKeyPermissionView>()?
-                            .ok_or_else(|| de::Error::missing_field("permission"))
-                            .and_then(|(key, permission)| {
-                                if key != "permission" {
-                                    Err(serde::de::Error::unknown_field(&key, &["permission"]))
-                                } else {
-                                    Ok(permission)
-                                }
-                            })?;
-
-                        Ok(ViewAccessKey {
-                            block_hash,
-                            block_height,
-                            result: ViewAccessKeyResult::Ok(AccessKeyView { nonce, permission }),
-                        })
-                    }
-                    Some("error") => {
-                        let error = map.next_value::<String>()?;
-                        let logs = map
-                            .next_entry::<String, Vec<String>>()?
-                            .ok_or_else(|| serde::de::Error::missing_field("logs"))
-                            .and_then(|(key, logs)| {
-                                if key != "logs" {
-                                    Err(serde::de::Error::unknown_field(&key, &["logs"]))
-                                } else {
-                                    Ok(logs)
-                                }
-                            })?;
-
-                        Ok(ViewAccessKey {
-                            block_hash,
-                            block_height,
-                            result: ViewAccessKeyResult::Err { error, logs },
-                        })
-                    }
-                    Some(field) => Err(serde::de::Error::unknown_field(field, &["nonce", "error"])),
-                    None => Err(serde::de::Error::missing_field("nonce or error")),
-                }
+                Ok(ViewAccessKeyList {
+                    block_hash,
+                    block_height,
+                    result: ViewAccessKeyListResult::Err { error, logs },
+                })
             }
+            Some(field) => Err(serde::de::Error::unknown_field(field, &["keys", "error"])),
+            None => Err(serde::de::Error::missing_field("keys or error")),
         }
+    }
+}
 
-        deserializer.deserialize_map(Visit)
+impl<'de> Deserialize<'de> for ViewAccessKeyList {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_map(Visit::<ViewAccessKeyList>::new())
+    }
+}
+
+struct Visit<T>(std::marker::PhantomData<T>)
+where
+    T: AccessKeyVisitor;
+
+impl<T> Visit<T>
+where
+    T: AccessKeyVisitor,
+{
+    fn new() -> Self {
+        Self(std::marker::PhantomData::<T>)
+    }
+}
+
+trait AccessKeyVisitor {
+    fn visit_map<'de, Map>(
+        map: Map,
+        block_hash: CryptoHash,
+        block_height: BlockHeight,
+    ) -> std::result::Result<Self, Map::Error>
+    where
+        Self: std::marker::Sized,
+        Map: de::MapAccess<'de>;
+}
+
+impl<'de, AccessKeyImpl> Visitor<'de> for Visit<AccessKeyImpl>
+where
+    AccessKeyImpl: AccessKeyVisitor,
+{
+    type Value = AccessKeyImpl;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "Expecting an key-value map")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: de::MapAccess<'de>,
+    {
+        let block_hash = map
+            .next_entry::<String, CryptoHash>()?
+            .ok_or_else(|| de::Error::missing_field("block_hash"))
+            .and_then(|(key, block_hash)| {
+                if key != "block_hash" {
+                    Err(de::Error::unknown_field(&key, &["block_hash"]))
+                } else {
+                    Ok(block_hash)
+                }
+            })?;
+
+        let block_height = map
+            .next_entry::<String, BlockHeight>()?
+            .ok_or_else(|| de::Error::missing_field("block_height"))
+            .and_then(|(key, block_hash)| {
+                if key != "block_height" {
+                    Err(de::Error::unknown_field(&key, &["block_height"]))
+                } else {
+                    Ok(block_hash)
+                }
+            })?;
+
+        AccessKeyImpl::visit_map(map, block_hash, block_height)
     }
 }

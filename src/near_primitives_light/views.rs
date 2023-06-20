@@ -2,6 +2,7 @@ use super::{errors::TxExecutionError, receipt::*, transaction::*, types::*};
 use crate::crypto::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 use chrono::DateTime;
+use serde_with::{base64::Base64, serde_as};
 use std::fmt;
 use strum::IntoEnumIterator;
 
@@ -12,7 +13,7 @@ use near_primitives_core::{
     contract::ContractCode,
     hash::hash,
     hash::CryptoHash,
-    serialize::{base64_format, dec_format, option_base64_format},
+    serialize::dec_format,
     types::{
         AccountId, Balance, BlockHeight, Gas, Nonce, NumBlocks, ProtocolVersion, ShardId,
         StorageUsage,
@@ -37,9 +38,11 @@ pub struct AccountView {
 }
 
 /// A view of the contract code.
+#[serde_as]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ContractCodeView {
-    #[serde(rename = "code_base64", with = "base64_format")]
+    #[serde(rename = "code_base64")]
+    #[serde_as(as = "Base64")]
     pub code: Vec<u8>,
     pub hash: CryptoHash,
 }
@@ -169,6 +172,35 @@ impl From<AccessKeyView> for AccessKey {
             permission: view.permission.into(),
         }
     }
+}
+
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Eq,
+    PartialEq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct AccessKeyListView {
+    pub keys: Vec<KeysView>,
+}
+
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Eq,
+    PartialEq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct KeysView {
+    pub public_key: Ed25519PublicKey,
+    pub access_key: AccessKey,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Default)]
@@ -382,6 +414,7 @@ pub struct ChunkView {
     pub receipts: Vec<ReceiptView>,
 }
 
+#[serde_as]
 #[derive(
     BorshSerialize,
     BorshDeserialize,
@@ -395,12 +428,12 @@ pub struct ChunkView {
 pub enum ActionView {
     CreateAccount,
     DeployContract {
-        #[serde(with = "base64_format")]
+        #[serde_as(as = "Base64")]
         code: Vec<u8>,
     },
     FunctionCall {
         method_name: String,
-        #[serde(with = "base64_format")]
+        #[serde_as(as = "Base64")]
         args: Vec<u8>,
         gas: Gas,
         #[serde(with = "dec_format")]
@@ -558,6 +591,7 @@ impl From<SignedTransaction> for SignedTransactionView {
     }
 }
 
+#[serde_as]
 #[derive(
     BorshSerialize,
     BorshDeserialize,
@@ -578,7 +612,7 @@ pub enum FinalExecutionStatus {
     /// The execution has failed with the given error.
     Failure(TxExecutionError),
     /// The execution has succeeded and returned some value or an empty vec encoded in base64.
-    SuccessValue(#[serde(with = "base64_format")] Vec<u8>),
+    SuccessValue(#[serde_as(as = "Base64")] Vec<u8>),
 }
 
 impl fmt::Debug for FinalExecutionStatus {
@@ -611,6 +645,7 @@ pub enum ServerError {
     Closed,
 }
 
+#[serde_as]
 #[derive(
     BorshSerialize, BorshDeserialize, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone,
 )]
@@ -621,7 +656,7 @@ pub enum ExecutionStatusView {
     /// The execution has failed.
     Failure(TxExecutionError),
     /// The final action succeeded and returned some value or an empty vec encoded in base64.
-    SuccessValue(#[serde(with = "base64_format")] Vec<u8>),
+    SuccessValue(#[serde_as(as = "Base64")] Vec<u8>),
     /// The final action of the receipt returned a promise or the signed transaction was converted
     /// to a receipt. Contains the receipt_id of the generated receipt.
     SuccessReceiptId(CryptoHash),
@@ -1006,6 +1041,7 @@ pub struct DataReceiverView {
     pub receiver_id: AccountId,
 }
 
+#[serde_as]
 #[derive(
     BorshSerialize,
     BorshDeserialize,
@@ -1029,7 +1065,7 @@ pub enum ReceiptEnumView {
     },
     Data {
         data_id: CryptoHash,
-        #[serde(with = "option_base64_format")]
+        #[serde_as(as = "Option<Base64>")]
         data: Option<Vec<u8>>,
     },
 }

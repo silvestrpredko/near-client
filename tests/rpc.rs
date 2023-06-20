@@ -6,7 +6,10 @@ use near_client::{
     ViewAccessKeyCall,
 };
 
-use near_primitives_core::types::AccountId;
+use near_primitives_core::{
+    account::{AccessKeyPermission, FunctionCallPermission},
+    types::AccountId,
+};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use reqwest::Url;
@@ -15,8 +18,7 @@ use workspaces::{network::Sandbox, types::SecretKey, Worker};
 
 // auxiliary structs and methods
 fn near_client(worker: &Worker<Sandbox>) -> NearClient {
-    let rpc_url =
-        Url::parse(format!("http://localhost:{}", worker.rpc_port().unwrap()).as_str()).unwrap();
+    let rpc_url = Url::parse(worker.rpc_addr().as_str()).unwrap();
     NearClient::new(rpc_url).unwrap()
 }
 
@@ -487,6 +489,141 @@ async fn delete_account() {
         access_key_err,
         Error::ViewAccessKeyCall(ViewAccessKeyCall::ParseError { .. })
     ));
+}
+
+#[tokio::test]
+async fn add_access_key_success() {
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
+    let signer = create_signer(&worker, &client, &signer_account_id).await;
+
+    // add full access key permission
+    let new_acc_sk = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let new_acc_pk = Ed25519PublicKey::from(&new_acc_sk);
+    let permission = AccessKeyPermission::FullAccess;
+
+    client
+        .add_access_key(&signer, &signer_account_id, new_acc_pk, permission.clone())
+        .commit(Finality::None)
+        .await
+        .unwrap();
+
+    let view_access_key = client
+        .view_access_key(&signer_account_id, &new_acc_pk, Finality::None)
+        .await
+        .unwrap();
+
+    let viewed_permission: AccessKeyPermission = view_access_key.permission.into();
+    assert_eq!(permission, viewed_permission);
+
+    // add permission for a single function execution only
+    let new_acc_sk = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let new_acc_pk = Ed25519PublicKey::from(&new_acc_sk);
+    let permission = AccessKeyPermission::FunctionCall(FunctionCallPermission {
+        allowance: None,
+        receiver_id: "some_contract".to_string(),
+        method_names: vec!["some_function".to_string()],
+    });
+
+    client
+        .add_access_key(&signer, &signer_account_id, new_acc_pk, permission.clone())
+        .commit(Finality::None)
+        .await
+        .unwrap();
+
+    let view_access_key = client
+        .view_access_key(&signer_account_id, &new_acc_pk, Finality::None)
+        .await
+        .unwrap();
+    let viewed_permission: AccessKeyPermission = view_access_key.permission.into();
+    assert_eq!(permission, viewed_permission);
+}
+
+#[tokio::test]
+async fn add_access_key_failed() {
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
+    let _ = create_signer(&worker, &client, &signer_account_id).await;
+
+    let impostor_account_id = AccountId::from_str("impostor.test.near").unwrap();
+    let impostor_signer = create_signer(&worker, &client, &impostor_account_id).await;
+
+    // will fail due to the lack of permissions
+    assert!(client
+        .add_access_key(
+            &impostor_signer,
+            &signer_account_id,
+            *impostor_signer.public_key(),
+            AccessKeyPermission::FullAccess
+        )
+        .commit(Finality::None)
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn view_access_key_list_success() {
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
+    let signer = create_signer(&worker, &client, &signer_account_id).await;
+
+    // add full access key permission
+    let new_acc_sk = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let new_acc_pk = Ed25519PublicKey::from(&new_acc_sk);
+    let permission = AccessKeyPermission::FullAccess;
+
+    client
+        .add_access_key(&signer, &signer_account_id, new_acc_pk, permission.clone())
+        .commit(Finality::None)
+        .await
+        .unwrap();
+
+    // add permission for a single function execution only
+    let new_acc_sk = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let new_acc_pk = Ed25519PublicKey::from(&new_acc_sk);
+    let permission = AccessKeyPermission::FunctionCall(FunctionCallPermission {
+        allowance: None,
+        receiver_id: "some_contract".to_string(),
+        method_names: vec!["some_function".to_string()],
+    });
+
+    client
+        .add_access_key(&signer, &signer_account_id, new_acc_pk, permission.clone())
+        .commit(Finality::None)
+        .await
+        .unwrap();
+
+    // let's count all of the keys
+    let access_key_list = client
+        .view_access_key_list(&signer_account_id, Finality::None)
+        .await
+        .unwrap();
+
+    assert_eq!(access_key_list.keys.len(), 3);
+}
+
+#[tokio::test]
+async fn delete_access_key() {
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
+    let signer = create_signer(&worker, &client, &signer_account_id).await;
+
+    client
+        .delete_access_key(&signer, &signer_account_id, signer.public_key().to_owned())
+        .commit(Finality::None)
+        .await
+        .unwrap();
+
+    let access_key_list = client
+        .view_access_key_list(&signer_account_id, Finality::None)
+        .await
+        .unwrap();
+
+    assert_eq!(access_key_list.keys.len(), 0);
 }
 
 fn temp_dir() -> tempfile::TempDir {

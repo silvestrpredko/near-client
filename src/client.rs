@@ -1,15 +1,16 @@
 use crate::{
     near_primitives_light::{
         transaction::{
-            Action, AddKeyAction, CreateAccountAction, DeleteAccountAction, DeployContractAction,
-            FunctionCallAction, TransferAction,
+            Action, AddKeyAction, CreateAccountAction, DeleteAccountAction, DeleteKeyAction,
+            DeployContractAction, FunctionCallAction, TransferAction,
         },
         types::Finality,
         views::{
-            AccessKeyView, BlockView, ExecutionOutcomeWithIdView, FinalExecutionOutcomeView,
-            FinalExecutionStatus,
+            AccessKeyListView, AccessKeyView, BlockView, ExecutionOutcomeWithIdView,
+            FinalExecutionOutcomeView, FinalExecutionStatus,
         },
     },
+    prelude::{ViewAccessKeyList, ViewAccessKeyListResult},
     utils::{ViewAccessKeyResult, ViewStateResult},
     ViewAccessKeyCall,
 };
@@ -222,6 +223,38 @@ impl NearClient {
             })
     }
 
+    /// Returns list of all access keys for the given account
+    ///
+    /// Arguments
+    /// - account_id - The user [`AccountId`] in a Near network
+    pub async fn view_access_key_list(
+        &self,
+        account_id: &AccountId,
+        finality: Finality,
+    ) -> Result<AccessKeyListView> {
+        self.rpc_client
+            .request(
+                "query",
+                Some(json!({
+                    "request_type": "view_access_key_list",
+                    "finality": finality,
+                    "account_id": account_id
+                })),
+            )
+            .await
+            .map_err(|err| Error::ViewAccessKeyListCall(ViewAccessKeyCall::Rpc(err)))
+            .and_then(|it| {
+                serde_json::from_value::<ViewAccessKeyList>(it)
+                    .map_err(Error::DeserializeAccessKeyListViewCall)
+            })
+            .and_then(|view_access_key_list| match view_access_key_list.result {
+                ViewAccessKeyListResult::Ok(access_key_list_view) => Ok(access_key_list_view),
+                ViewAccessKeyListResult::Err { error, logs } => Err(Error::ViewAccessKeyListCall(
+                    ViewAccessKeyCall::ParseError { error, logs },
+                )),
+            })
+    }
+
     /// Returns information regarding contract state
     /// in a key-value sequence representation
     ///
@@ -283,6 +316,49 @@ impl NearClient {
             })?;
 
         proceed_outcome(signer, execution_outcome)
+    }
+
+    /// Creates new access key on the specified account
+    ///
+    /// Arguments
+    /// - signer - Transaction [`Signer`]
+    /// - account_id - The user [`AccountId`] in a Near network
+    /// - new_account_pk - The new [`Ed25519PublicKey`]
+    /// - permission - Granted permissions level for the new access key
+    pub fn add_access_key<'a>(
+        &'a self,
+        signer: &'a Signer,
+        account_id: &'a AccountId,
+        new_account_pk: Ed25519PublicKey,
+        permission: AccessKeyPermission,
+    ) -> FunctionCall {
+        let info = TransactionInfo::new(self, signer, account_id);
+        let actions = vec![AddKeyAction {
+            public_key: new_account_pk,
+            access_key: AccessKey {
+                nonce: rand::random::<u64>(),
+                permission,
+            },
+        }
+        .into()];
+        FunctionCall { info, actions }
+    }
+
+    /// Deletes an access key on the specified account
+    ///
+    /// Arguments
+    /// - signer - Transaction [`Signer`]
+    /// - account_id - The user [`AccountId`] in a Near network
+    /// - public_key - The [`Ed25519PublicKey`] to be deleted from users access keys
+    pub fn delete_access_key<'a>(
+        &'a self,
+        signer: &'a Signer,
+        account_id: &'a AccountId,
+        public_key: Ed25519PublicKey,
+    ) -> FunctionCall {
+        let info = TransactionInfo::new(self, signer, account_id);
+        let actions = vec![DeleteKeyAction { public_key }.into()];
+        FunctionCall { info, actions }
     }
 
     /// Execute a transaction with a function call to the smart contract
