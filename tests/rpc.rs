@@ -119,6 +119,38 @@ async fn contract_function_call() {
 }
 
 #[tokio::test]
+async fn contract_function_call_with_wrong_nonce() {
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
+    let signer = create_signer(&worker, &client, &signer_account_id).await;
+    let wasm = download_contract().await;
+
+    signer.update_nonce(0);
+
+    client
+        .deploy_contract(&signer, &signer_account_id, wasm)
+        .retry(Retry::ONCE)
+        .commit(Finality::None)
+        .await
+        .unwrap();
+
+    signer.update_nonce(0);
+
+    client
+        .function_call(&signer, &signer_account_id, "new_default_meta")
+        .args(json!({
+            "owner_id": &signer_account_id,
+            "total_supply": "100",
+        }))
+        .gas(near_units::parse_gas!("300 T") as u64)
+        .retry(Retry::TWICE)
+        .commit(Finality::None)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn contract_function_call_failed() {
     let worker = workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
