@@ -349,7 +349,7 @@ pub enum HostError {
     Deprecated { method_name: String },
     /// General errors for ECDSA recover.
     ECRecoverError { msg: String },
-    /// Invalid input to alt_bn128 familiy of functions (e.g., point which isn't
+    /// Invalid input to alt_bn128 family of functions (e.g., point which isn't
     /// on the curve).
     AltBn128InvalidInput { msg: String },
     /// Invalid input to ed25519 signature verification function (e.g. signature cannot be
