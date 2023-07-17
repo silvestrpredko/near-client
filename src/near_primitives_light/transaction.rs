@@ -3,12 +3,13 @@ use crate::crypto::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 use bs58::encode as to_base58;
 use serde::{Deserialize, Serialize};
+use serde_with::{base64::Base64, serde_as};
 
 use near_primitives_core::{
     account::AccessKey,
     hash::{hash, CryptoHash},
     profile::{ProfileDataV2, ProfileDataV3},
-    serialize::{base64_format, dec_format},
+    serialize::dec_format,
     types::{AccountId, Balance, BlockHeight, Gas, Nonce},
 };
 
@@ -127,10 +128,11 @@ impl From<CreateAccountAction> for Action {
 }
 
 /// Deploy contract action
+#[serde_as]
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct DeployContractAction {
     /// WebAssembly binary
-    #[serde(with = "base64_format")]
+    #[serde_as(as = "Base64")]
     pub code: Vec<u8>,
 }
 
@@ -146,10 +148,11 @@ impl fmt::Debug for DeployContractAction {
     }
 }
 
+#[serde_as]
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct FunctionCallAction {
     pub method_name: String,
-    #[serde(with = "base64_format")]
+    #[serde_as(as = "Base64")]
     pub args: Vec<u8>,
     pub gas: Gas,
     #[serde(with = "dec_format")]

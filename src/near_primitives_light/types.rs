@@ -62,7 +62,7 @@ pub type StateChangesKinds = Vec<StateChangeKind>;
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub enum StateChangeCause {
     /// A type of update that does not get finalized. Used for verification and execution of
-    /// immutable smart contract methods. Attempt fo finalize a `TrieUpdate` containing such
+    /// immutable smart contract methods. Attempt to finalize a `TrieUpdate` containing such
     /// change will lead to panic.
     NotWritableToDisk,
     /// A type of update that is used to mark the initial storage update, e.g. during genesis

@@ -2,11 +2,12 @@ use super::transaction::*;
 use crate::crypto::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use serde_with::{base64::Base64, serde_as};
 use std::{borrow::Borrow, collections::HashMap, fmt, hash::Hash};
 
 use near_primitives_core::{
     hash::CryptoHash,
-    serialize::{dec_format, option_base64_format},
+    serialize::dec_format,
     types::{AccountId, Balance, ShardId},
 };
 
@@ -119,10 +120,11 @@ pub struct ActionReceipt {
 
 /// An incoming (ingress) `DataReceipt` which is going to a Receipt's `receiver` input_data_ids
 /// Which will be converted to `PromiseResult::Successful(value)` or `PromiseResult::Failed`
+#[serde_as]
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct DataReceipt {
     pub data_id: CryptoHash,
-    #[serde(with = "option_base64_format")]
+    #[serde_as(as = "Option<Base64>")]
     pub data: Option<Vec<u8>>,
 }
 

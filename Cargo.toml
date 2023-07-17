@@ -14,14 +14,15 @@ Primarily designed for WebAssembly.
 
 [dependencies]
 base64 = "0.21"
-bs58 = "0.4"
+bs58 = "0.5"
 borsh = "0.10"
 curve25519-dalek = "3"
 chrono = { version = "0.4", features = ["serde"] }
 ed25519-dalek = "1"
-itertools = "0.10"
-near-primitives-core = { version = "0.16" }
+itertools = "0.11"
+near-primitives-core = { version = "0.17" }
 near-units = "0.2"
+rand = "0.8.5"
 reqwest = { version = "0.11", features = [
     "json",
     "rustls-tls",
@@ -29,13 +30,13 @@ reqwest = { version = "0.11", features = [
 serde = { version = "1", default-features = false, features = ["derive", "rc"] }
 strum = "0.24"
 serde_json = { version = "1", default-features = false }
+serde_with = "3"
 thiserror = "1"
 url = "2"
 x25519-dalek = { version = "1", features = ["serde"] }
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["json"] }
-rand = "0.8.5"
 rand_chacha = "0.3"
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }

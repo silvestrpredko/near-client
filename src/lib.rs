@@ -68,8 +68,11 @@ pub enum Error {
     #[error("Block call failed with an error: \"{0}\"")]
     BlockCall(rpc::Error),
     #[doc(hidden)]
-    #[error("Access key call failed with an error: \"{0}\"")]
+    #[error("View access key call failed with an error: \"{0}\"")]
     ViewAccessKeyCall(ViewAccessKeyCall),
+    #[doc(hidden)]
+    #[error("View access key list call failed with an error: \"{0}\"")]
+    ViewAccessKeyListCall(ViewAccessKeyCall),
     #[doc(hidden)]
     #[error("View call failed with an error: \"{0}\"")]
     ViewCall(rpc::Error),
@@ -94,6 +97,9 @@ pub enum Error {
     #[doc(hidden)]
     #[error("Can't deserialize an access key response, cause: [\"{0}\"]")]
     DeserializeAccessKeyViewCall(serde_json::Error),
+    #[doc(hidden)]
+    #[error("Can't deserialize an access key response, cause: [\"{0}\"]")]
+    DeserializeAccessKeyListViewCall(serde_json::Error),
 }
 
 #[doc(hidden)]
