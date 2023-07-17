@@ -1,4 +1,8 @@
 use crate::{
+    components::{
+        CallResult, TransactionInfo, ViewAccessKey, ViewAccessKeyList, ViewAccessKeyListResult,
+        ViewAccessKeyResult, ViewResult, ViewStateResult,
+    },
     near_primitives_light::{
         transaction::{
             Action, AddKeyAction, CreateAccountAction, DeleteAccountAction, DeleteKeyAction,
@@ -10,36 +14,26 @@ use crate::{
             FinalExecutionOutcomeView, FinalExecutionStatus,
         },
     },
-    prelude::{ViewAccessKeyList, ViewAccessKeyListResult},
-    utils::{ViewAccessKeyResult, ViewStateResult},
-    ViewAccessKeyCall,
+    prelude::{InvalidTxError, TxExecutionError},
+    rpc::{client::RpcClient, Error as RpcError, NearError},
+    utils::{extract_logs, serialize_arguments, serialize_transaction},
+    Error, Result, ViewAccessKeyCall,
 };
-
 use near_primitives_core::{
     account::{id::AccountId, AccessKey, AccessKeyPermission},
     hash::CryptoHash,
     types::{Balance, Gas, Nonce},
 };
-
-use crate::{
-    rpc::{client::RpcClient, Error as RpcError, NearError},
-    utils::{
-        extract_logs, serialize_arguments, serialize_transaction, CallResult, TransactionInfo,
-        ViewAccessKey, ViewResult,
-    },
-    Error, Result,
+use std::{
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use crate::crypto::prelude::*;
 use base64::prelude::*;
-use serde::de::DeserializeOwned;
+use serde::de::{self, DeserializeOwned};
 use serde_json::{json, Value};
 use url::Url;
-
-use std::{
-    ops::Deref,
-    sync::atomic::{AtomicU64, Ordering},
-};
 
 type AtomicNonce = AtomicU64;
 
@@ -96,12 +90,12 @@ impl Signer {
 
     /// Returns the key nonce
     pub fn nonce(&self) -> Nonce {
-        self.nonce.load(Ordering::Acquire)
+        self.nonce.load(Ordering::Relaxed)
     }
 
     /// Update the key nonce
     pub fn update_nonce(&self, nonce: Nonce) {
-        self.nonce.store(nonce, Ordering::Release);
+        self.nonce.store(nonce, Ordering::Relaxed);
     }
 
     /// Increment the key nonce.
@@ -341,7 +335,7 @@ impl NearClient {
             },
         }
         .into()];
-        FunctionCall { info, actions }
+        FunctionCall::new(info, actions)
     }
 
     /// Deletes an access key on the specified account
@@ -358,7 +352,7 @@ impl NearClient {
     ) -> FunctionCall {
         let info = TransactionInfo::new(self, signer, account_id);
         let actions = vec![DeleteKeyAction { public_key }.into()];
-        FunctionCall { info, actions }
+        FunctionCall::new(info, actions)
     }
 
     /// Execute a transaction with a function call to the smart contract
@@ -391,10 +385,10 @@ impl NearClient {
         contract_id: &'a AccountId,
         wasm: Vec<u8>,
     ) -> FunctionCall {
-        FunctionCall {
-            info: TransactionInfo::new(self, signer, contract_id),
-            actions: vec![Action::from(DeployContractAction { code: wasm })],
-        }
+        FunctionCall::new(
+            TransactionInfo::new(self, signer, contract_id),
+            vec![Action::from(DeployContractAction { code: wasm })],
+        )
     }
 
     /// Creates account
@@ -426,7 +420,7 @@ impl NearClient {
             TransferAction { deposit: amount }.into(),
         ];
 
-        FunctionCall { info, actions }
+        FunctionCall::new(info, actions)
     }
 
     /// Deletes account
@@ -448,7 +442,7 @@ impl NearClient {
         }
         .into()];
 
-        FunctionCall { info, actions }
+        FunctionCall::new(info, actions)
     }
 }
 
@@ -480,6 +474,12 @@ impl<T: DeserializeOwned> Deref for ViewOutput<T> {
     }
 }
 
+impl<T: DeserializeOwned> DerefMut for ViewOutput<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
 /// Function call output.
 #[derive(Debug)]
 pub struct Output {
@@ -498,12 +498,12 @@ impl Output {
 
     #[allow(clippy::misnamed_getters)]
     /// Returns a transaction id
-    pub fn id(&self) -> CryptoHash {
+    pub const fn id(&self) -> CryptoHash {
         self.transaction.id
     }
 
     /// Amount of gas that was burnt during transaction execution
-    pub fn gas_burnt(&self) -> Gas {
+    pub const fn gas_burnt(&self) -> Gas {
         self.transaction.outcome.gas_burnt
     }
 
@@ -519,6 +519,7 @@ pub struct FunctionCallBuilder<'a> {
     deposit: Balance,
     gas: Gas,
     args: Option<Value>,
+    retry: Retry,
     method_name: &'a str,
 }
 
@@ -530,16 +531,17 @@ impl<'a> FunctionCallBuilder<'a> {
             gas: Default::default(),
             args: Default::default(),
             deposit: Default::default(),
+            retry: Default::default(),
         }
     }
 
-    pub fn deposit(mut self, deposit: Balance) -> Self {
+    pub const fn deposit(mut self, deposit: Balance) -> Self {
         self.deposit = deposit;
         self
     }
 
     /// Amount of gas that will be hold for function execution
-    pub fn gas(mut self, gas: Gas) -> Self {
+    pub const fn gas(mut self, gas: Gas) -> Self {
         self.gas = gas;
         self
     }
@@ -561,62 +563,179 @@ impl<'a> FunctionCallBuilder<'a> {
         Ok(FunctionCall {
             info: self.info,
             actions: vec![action],
+            retry: self.retry,
         })
     }
 
-    /// Take a look at [`FunctionCall`] `commit`
-    pub async fn commit(self, block_finality: Finality) -> Result<Output> {
-        let call = self.build()?;
-        call.commit(block_finality).await
+    /// Set [`Retry`] strategy
+    pub const fn retry(mut self, retry: Retry) -> Self {
+        self.retry = retry;
+        self
     }
 
-    /// Take a look at [`FunctionCall`] `commit_async`
-    pub async fn commit_async(self, block_finality: Finality) -> Result<CryptoHash> {
+    /// Sends a transaction and waits until transaction is fully complete. (Has a 10 second timeout)
+    /// Also, possible that an output data will be empty if the transaction is still executing
+    ///
+    /// ## Arguments
+    ///
+    /// - **finality** - Block [`Finality`]
+    pub async fn commit(self, finality: Finality) -> Result<Output> {
         let call = self.build()?;
-        call.commit_async(block_finality).await
+        call.commit(finality).await
     }
+
+    /// Sends a transaction and immediately returns transaction hash.
+    ///
+    /// ## Arguments
+    ///
+    /// - **finality** - Block [`Finality`]
+    pub async fn commit_async(self, finality: Finality) -> Result<CryptoHash> {
+        let call = self.build()?;
+        call.commit_async(finality).await
+    }
+}
+
+/// Tells the **client** to execute transaction one more time if it's failed.
+/// > It's only happens during **InvalidNonce** error.
+///
+/// - NONE - default value, transaction executes once
+/// - ONCE - retry once
+/// - TWICE - retry two times
+///
+#[repr(usize)]
+#[derive(Debug, Default, Clone, Copy)]
+pub enum Retry {
+    /// Executes once, basically no retry
+    #[default]
+    NONE = 1,
+    /// If **InvalidNonce** error received try to execute one more time
+    ONCE = 2,
+    /// If **InvalidNonce** error received try to execute two times
+    TWICE = 3,
 }
 
 #[doc(hidden)]
 pub struct FunctionCall<'a> {
     info: TransactionInfo<'a>,
     actions: Vec<Action>,
+    retry: Retry,
 }
 
 impl<'a> FunctionCall<'a> {
     /// Sends a transaction and waits until transaction is fully complete. (Has a 10 second timeout)
     /// Also, possible that an output data will be empty if the transaction is still executing
-    pub async fn commit(self, block_finality: Finality) -> Result<Output> {
-        let transaction_bytes = BASE64_STANDARD_NO_PAD
-            .encode(serialize_transaction(&self.info, self.actions, block_finality).await?);
-
-        let execution_outcome = self
-            .info
-            .rpc()
-            .request("broadcast_tx_commit", Some(json!(vec![transaction_bytes])))
-            .await
-            .map_err(Error::CommitTransaction)
-            .and_then(|execution_outcome| {
-                serde_json::from_value::<FinalExecutionOutcomeView>(execution_outcome)
-                    .map_err(Error::DeserializeExecutionOutcome)
-            })?;
+    ///
+    /// ## Arguments
+    ///
+    /// - **finality** - Block [`Finality`]
+    pub async fn commit(self, finality: Finality) -> Result<Output> {
+        let execution_outcome =
+            commit_with_retry(&self, finality, "broadcast_tx_commit", self.retry)
+                .await
+                .and_then(|execution_outcome| {
+                    serde_json::from_value::<FinalExecutionOutcomeView>(execution_outcome)
+                        .map_err(Error::DeserializeExecutionOutcome)
+                })?;
 
         proceed_outcome(self.info.signer(), execution_outcome)
     }
 
     /// Sends a transaction and immediately returns transaction hash.
-    pub async fn commit_async(self, block_finality: Finality) -> Result<CryptoHash> {
-        let transaction_bytes = BASE64_STANDARD_NO_PAD
-            .encode(serialize_transaction(&self.info, self.actions, block_finality).await?);
-        self.info
-            .rpc()
-            .request("broadcast_tx_async", Some(json!(vec![transaction_bytes])))
+    ///
+    /// ## Arguments
+    ///
+    /// - **finality** - Block [`Finality`]
+    pub async fn commit_async(self, finality: Finality) -> Result<CryptoHash> {
+        commit_with_retry(&self, finality, "broadcast_tx_async", self.retry)
             .await
-            .map_err(Error::CommitAsyncTransaction)
             .and_then(|id| {
                 serde_json::from_value::<CryptoHash>(id).map_err(Error::DeserializeTransactionId)
             })
     }
+
+    /// Set [`Retry`] strategy
+    pub const fn retry(mut self, retry: Retry) -> Self {
+        self.retry = retry;
+        self
+    }
+
+    const fn info(&self) -> &TransactionInfo {
+        &self.info
+    }
+
+    fn actions(&self) -> &[Action] {
+        &self.actions
+    }
+
+    const fn new(info: TransactionInfo<'a>, actions: Vec<Action>) -> Self {
+        Self {
+            info,
+            actions,
+            retry: Retry::NONE,
+        }
+    }
+}
+
+async fn commit_with_retry<'a>(
+    call: &FunctionCall<'a>,
+    finality: Finality,
+    transaction_type: &'static str,
+    retry: Retry,
+) -> Result<Value> {
+    let mut execution_count = 0;
+    let retry_count = retry as usize;
+
+    loop {
+        execution_count += 1;
+
+        let transaction = BASE64_STANDARD_NO_PAD.encode(
+            serialize_transaction(call.info(), call.actions().to_vec(), finality.clone()).await?,
+        );
+
+        let resp = call
+            .info()
+            .rpc()
+            .request(transaction_type, Some(json!(vec![transaction])))
+            .await
+            .map_err(transaction_err);
+
+        if let Err(Error::CommitTransaction(TxExecutionError::InvalidTxError(
+            InvalidTxError::InvalidNonce { ak_nonce, .. },
+        ))) = resp
+        {
+            if retry_count > 1 && execution_count <= retry_count {
+                call.info().signer().update_nonce(ak_nonce + 1);
+                continue;
+            }
+        }
+
+        return resp;
+    }
+}
+
+fn transaction_err(err: RpcError) -> Error {
+    let RpcError::NearProtocol(near_err) = err else {
+        return Error::RpcError(err);
+    };
+
+    let tx_err = near_err
+        .data()
+        .get_mut("TxExecutionError")
+        .map(Value::take)
+        .ok_or(Error::DeserializeTransactionOutput(de::Error::custom(
+            "TxExecutionError not found in error response",
+        )));
+
+    let tx_err = match tx_err {
+        Ok(value) => value,
+        Err(err) => return err,
+    };
+
+    let (Ok(final_err) | Err(final_err)) = serde_json::from_value::<TxExecutionError>(tx_err)
+        .map_err(Error::DeserializeTransactionOutput)
+        .map(Error::CommitTransaction);
+
+    final_err
 }
 
 #[allow(clippy::result_large_err)]

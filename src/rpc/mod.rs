@@ -49,6 +49,10 @@ impl NearError {
             ..Default::default()
         }
     }
+
+    pub fn data(self) -> Value {
+        self.data
+    }
 }
 
 impl Display for NearError {

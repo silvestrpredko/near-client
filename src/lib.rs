@@ -3,6 +3,8 @@
 
 /// API for the network requests to the RPC endpoint.
 pub mod client;
+#[doc(hidden)]
+pub mod components;
 pub mod crypto;
 #[doc(hidden)]
 pub mod near_primitives_light;
@@ -13,6 +15,7 @@ pub mod utils;
 use std::fmt::Display;
 
 pub use near_primitives_core as core;
+pub use near_primitives_light::errors::TxExecutionError;
 pub use near_units;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -21,9 +24,12 @@ type Result<T> = std::result::Result<T, Error>;
 /// All the frequently used API
 pub mod prelude {
     pub use super::client::*;
+    pub use super::components::*;
     pub use super::crypto::prelude::*;
-    pub use super::near_primitives_light::types::Finality;
-    pub use super::utils::*;
+    pub use super::near_primitives_light::{
+        errors::{self as transaction_errors, InvalidTxError, TxExecutionError},
+        types::Finality,
+    };
     pub use near_primitives_core::types::{AccountId, Balance, Gas, Nonce};
 }
 
@@ -39,10 +45,7 @@ pub enum Error {
     TxNotStarted(Box<Vec<String>>),
     #[doc(hidden)]
     #[error("Transaction failed during execution, cause [\"{0:?}\"], logs: [\"{1:?}\"]")]
-    TxExecution(
-        near_primitives_light::errors::TxExecutionError,
-        Box<Vec<String>>,
-    ),
+    TxExecution(TxExecutionError, Box<Vec<String>>),
     #[doc(hidden)]
     #[error("Transaction serialization error: [\"{0}\"]")]
     TxSerialization(std::io::Error),
@@ -60,10 +63,10 @@ pub enum Error {
     ViewTransaction(rpc::Error),
     #[doc(hidden)]
     #[error("Transaction commit failed with an error, cause: [\"{0}\"]")]
-    CommitTransaction(rpc::Error),
+    CommitTransaction(TxExecutionError),
     #[doc(hidden)]
-    #[error("Transaction async commit failed with an error, cause: [\"{0}\"]")]
-    CommitAsyncTransaction(rpc::Error),
+    #[error("Failed to execute rpc call to Near blockchain, cause: [\"{0}\"]")]
+    RpcError(rpc::Error),
     #[doc(hidden)]
     #[error("Block call failed with an error: \"{0}\"")]
     BlockCall(rpc::Error),
