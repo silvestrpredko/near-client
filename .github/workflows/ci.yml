@@ -57,7 +57,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        # Return back to stable when https://github.com/near/nearcore/issues/9143 will be fixed
+        uses: dtolnay/rust-toolchain@1.69
         with:
           targets: "wasm32-unknown-unknown"
       - uses: Swatinem/rust-cache@v2
