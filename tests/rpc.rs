@@ -15,7 +15,8 @@ use workspaces::{network::Sandbox, types::SecretKey, Worker};
 
 // auxiliary structs and methods
 fn near_client(worker: &Worker<Sandbox>) -> NearClient {
-    let rpc_url = Url::parse(format!("http://localhost:{}", worker.rpc_port()).as_str()).unwrap();
+    let rpc_url =
+        Url::parse(format!("http://localhost:{}", worker.rpc_port().unwrap()).as_str()).unwrap();
     NearClient::new(rpc_url).unwrap()
 }
 

@@ -325,6 +325,201 @@ pub struct ActionError {
     pub kind: ActionErrorKind,
 }
 
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    BorshDeserialize,
+    BorshSerialize,
+    serde::Deserialize,
+    serde::Serialize,
+    strum::IntoStaticStr,
+)]
+pub enum HostError {
+    /// String encoding is bad UTF-16 sequence
+    BadUTF16,
+    /// String encoding is bad UTF-8 sequence
+    BadUTF8,
+    /// Exceeded the prepaid gas
+    GasExceeded,
+    /// Exceeded the maximum amount of gas allowed to burn per contract
+    GasLimitExceeded,
+    /// Exceeded the account balance
+    BalanceExceeded,
+    /// Tried to call an empty method name
+    EmptyMethodName,
+    /// Smart contract panicked
+    GuestPanic { panic_msg: String },
+    /// IntegerOverflow happened during a contract execution
+    IntegerOverflow,
+    /// `promise_idx` does not correspond to existing promises
+    InvalidPromiseIndex { promise_idx: u64 },
+    /// Actions can only be appended to non-joint promise.
+    CannotAppendActionToJointPromise,
+    /// Returning joint promise is currently prohibited
+    CannotReturnJointPromise,
+    /// Accessed invalid promise result index
+    InvalidPromiseResultIndex { result_idx: u64 },
+    /// Accessed invalid register id
+    InvalidRegisterId { register_id: u64 },
+    /// Iterator `iterator_index` was invalidated after its creation by performing a mutable operation on trie
+    IteratorWasInvalidated { iterator_index: u64 },
+    /// Accessed memory outside the bounds
+    MemoryAccessViolation,
+    /// VM Logic returned an invalid receipt index
+    InvalidReceiptIndex { receipt_index: u64 },
+    /// Iterator index `iterator_index` does not exist
+    InvalidIteratorIndex { iterator_index: u64 },
+    /// VM Logic returned an invalid account id
+    InvalidAccountId,
+    /// VM Logic returned an invalid method name
+    InvalidMethodName,
+    /// VM Logic provided an invalid public key
+    InvalidPublicKey,
+    /// `method_name` is not allowed in view calls
+    ProhibitedInView { method_name: String },
+    /// The total number of logs will exceed the limit.
+    NumberOfLogsExceeded { limit: u64 },
+    /// The storage key length exceeded the limit.
+    KeyLengthExceeded { length: u64, limit: u64 },
+    /// The storage value length exceeded the limit.
+    ValueLengthExceeded { length: u64, limit: u64 },
+    /// The total log length exceeded the limit.
+    TotalLogLengthExceeded { length: u64, limit: u64 },
+    /// The maximum number of promises within a FunctionCall exceeded the limit.
+    NumberPromisesExceeded { number_of_promises: u64, limit: u64 },
+    /// The maximum number of input data dependencies exceeded the limit.
+    NumberInputDataDependenciesExceeded {
+        number_of_input_data_dependencies: u64,
+        limit: u64,
+    },
+    /// The returned value length exceeded the limit.
+    ReturnedValueLengthExceeded { length: u64, limit: u64 },
+    /// The contract size for DeployContract action exceeded the limit.
+    ContractSizeExceeded { size: u64, limit: u64 },
+    /// The host function was deprecated.
+    Deprecated { method_name: String },
+    /// General errors for ECDSA recover.
+    ECRecoverError { msg: String },
+    /// Invalid input to alt_bn128 familiy of functions (e.g., point which isn't
+    /// on the curve).
+    AltBn128InvalidInput { msg: String },
+    /// Invalid input to ed25519 signature verification function (e.g. signature cannot be
+    /// derived from bytes).
+    Ed25519VerifyInvalidInput { msg: String },
+}
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    BorshDeserialize,
+    BorshSerialize,
+    serde::Deserialize,
+    serde::Serialize,
+    strum::IntoStaticStr,
+)]
+pub enum CompilationError {
+    CodeDoesNotExist {
+        account_id: AccountId,
+    },
+    PrepareError(PrepareError),
+    /// This is for defense in depth.
+    /// We expect our runtime-independent preparation code to fully catch all invalid wasms,
+    /// but, if it ever misses something we’ll emit this error
+    WasmerCompileError {
+        msg: String,
+    },
+}
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    BorshDeserialize,
+    BorshSerialize,
+    serde::Deserialize,
+    serde::Serialize,
+    strum::IntoStaticStr,
+)]
+pub enum MethodResolveError {
+    MethodEmptyName,
+    MethodNotFound,
+    MethodInvalidSignature,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    BorshDeserialize,
+    BorshSerialize,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+/// Error that can occur while preparing or executing Wasm smart-contract.
+pub enum PrepareError {
+    /// Error happened while serializing the module.
+    Serialization,
+    /// Error happened while deserializing the module.
+    Deserialization,
+    /// Internal memory declaration has been found in the module.
+    InternalMemoryDeclared,
+    /// Gas instrumentation failed.
+    ///
+    /// This most likely indicates the module isn't valid.
+    GasInstrumentation,
+    /// Stack instrumentation failed.
+    ///
+    /// This  most likely indicates the module isn't valid.
+    StackHeightInstrumentation,
+    /// Error happened during instantiation.
+    ///
+    /// This might indicate that `start` function trapped, or module isn't
+    /// instantiable and/or unlinkable.
+    Instantiate,
+    /// Error creating memory.
+    Memory,
+    /// Contract contains too many functions.
+    TooManyFunctions,
+    /// Contract contains too many locals.
+    TooManyLocals,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    BorshDeserialize,
+    BorshSerialize,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub enum FunctionCallError {
+    /// Wasm compilation error
+    CompilationError(CompilationError),
+    /// Wasm binary env link error
+    ///
+    /// Note: this is only to deserialize old data, use execution error for new data
+    LinkError {
+        msg: String,
+    },
+    /// Import/export resolve error
+    MethodResolveError(MethodResolveError),
+    WasmUnknownError,
+    /// Note: this is only to deserialize old data, use execution error for new data
+    HostError(HostError),
+    // Unused, can be reused by a future error but must be exactly one error to keep ExecutionError
+    // error borsh serialized at correct index
+    _EVMError,
+    ExecutionError(String),
+}
+
 impl std::error::Error for ActionError {}
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -390,7 +585,7 @@ pub enum ActionErrorKind {
         minimum_stake: Balance,
     },
     /// An error occurred during a `FunctionCall` Action, parameter is debug message.
-    FunctionCallError(near_vm_errors::FunctionCallErrorSer),
+    FunctionCallError(FunctionCallError),
     /// Error occurs when a new `ActionReceipt` created by the `FunctionCall` action fails
     /// receipt validation.
     NewReceiptValidationError(ReceiptValidationError),
