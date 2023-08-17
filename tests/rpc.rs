@@ -187,6 +187,8 @@ async fn contract_function_call_failed() {
         .unwrap();
 }
 
+// Temporary ignore tests cause of this issue, https://github.com/near/nearcore/issues/9143
+#[ignore]
 #[tokio::test]
 async fn multiple_tests() {
     let worker = workspaces::sandbox().await.unwrap();
@@ -280,6 +282,8 @@ async fn fc_with_param_and_result(client: &NearClient, contract_id: &AccountId, 
     assert_eq!(id, expected_id);
 }
 
+// Temporary ignore tests cause of this issue, https://github.com/near/nearcore/issues/9143
+#[ignore]
 #[tokio::test]
 async fn async_transaction() {
     let worker = workspaces::sandbox().await.unwrap();
