@@ -251,11 +251,11 @@ where
         let block_height = map
             .next_entry::<String, BlockHeight>()?
             .ok_or_else(|| de::Error::missing_field("block_height"))
-            .and_then(|(key, block_hash)| {
+            .and_then(|(key, block_height)| {
                 if key != "block_height" {
                     Err(de::Error::unknown_field(&key, &["block_height"]))
                 } else {
-                    Ok(block_hash)
+                    Ok(block_height)
                 }
             })?;
 
