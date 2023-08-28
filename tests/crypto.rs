@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use borsh::BorshDeserialize;
-use ed25519_dalek::{ExpandedSecretKey, SecretKey as DalekSecretKey};
+use ed25519_dalek::SigningKey;
 use near_client::crypto::prelude::*;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -87,21 +87,17 @@ fn from_string_ed25519() {
 
 #[test]
 fn from_expanded() {
-    let dalek_sk = ExpandedSecretKey::from(&DalekSecretKey::from_bytes(&random_bits()).unwrap());
-    let exp_str = format!(
-        "ed25519:{}",
-        bs58::encode(dalek_sk.to_bytes()).into_string()
-    );
+    let sk = SigningKey::from_bytes(&random_bits());
+    let exp_str = format!("ed25519:{}", bs58::encode(sk.to_bytes()).into_string());
     let sk = Ed25519SecretKey::from_expanded(&exp_str).unwrap();
 
-    assert_eq!(sk.as_bytes(), &dalek_sk.to_bytes()[..32]);
+    assert_eq!(sk.as_bytes(), &sk.to_bytes());
 }
 
 #[test]
 fn from_expanded_fail() {
-    let dalek_sk = ExpandedSecretKey::from(&DalekSecretKey::from_bytes(&random_bits()).unwrap());
-
-    let exp_str = bs58::encode(dalek_sk.to_bytes()).into_string();
+    let sk = SigningKey::from_bytes(&random_bits());
+    let exp_str = bs58::encode(sk.to_bytes()).into_string();
     assert!(matches!(
         Ed25519SecretKey::from_expanded(&exp_str),
         Err(Error::UnknownKeyType { .. })
@@ -211,7 +207,7 @@ fn public_key_verify() {
     let sk = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
     let pk = Ed25519PublicKey::from(&sk);
 
-    let signature = sk.sign(b"message", &pk);
+    let signature = sk.sign(b"message");
     pk.verify(b"message", &signature).unwrap();
 }
 
@@ -234,6 +230,23 @@ fn key_exchange() {
 }
 
 #[test]
+fn key_exchange_multiple() {
+    let alice_sk = SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let alice_pk = PublicKey::from(&alice_sk);
+
+    let bob_sk = SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let bob_pk = PublicKey::from(&bob_sk);
+
+    let karl_sk = SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let karl_pk = PublicKey::from(&karl_sk);
+
+    assert_ne!(karl_sk.exchange(&alice_pk), bob_sk.exchange(&alice_pk));
+    assert_ne!(karl_sk.exchange(&karl_pk), karl_sk.to_bytes());
+    assert_eq!(alice_sk.exchange(&karl_pk), karl_sk.exchange(&alice_pk));
+    assert_eq!(alice_sk.exchange(&bob_pk), bob_sk.exchange(&alice_pk));
+}
+
+#[test]
 fn borsh_ed25519() {
     let sk = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
     let sk_bytes = borsh::to_vec(&sk).unwrap();
@@ -247,7 +260,7 @@ fn borsh_ed25519() {
     let sk = Ed25519SecretKey::try_from_slice(&sk_bytes).unwrap();
     let pk = Ed25519PublicKey::try_from_slice(&pk_bytes).unwrap();
 
-    let signature_bytes = borsh::to_vec(&sk.sign(b"message", &pk)).unwrap();
+    let signature_bytes = borsh::to_vec(&sk.sign(b"message")).unwrap();
     pk.verify(
         b"message",
         &Ed25519Signature::try_from_slice(&signature_bytes).unwrap(),
@@ -314,6 +327,23 @@ fn convert_from_edwards_to_montgomery() {
     assert_eq!(
         alice_sk_dhx.exchange(&bob_pk_dhx),
         bob_sk_dhx.exchange(&alice_pk_dhx)
+    );
+}
+
+#[test]
+fn convert_from_edwards_to_montgomery_partially() {
+    let alice_sk = SecretKey::try_from_bytes(&random_bits()).unwrap();
+    let bob_sk = Ed25519SecretKey::try_from_bytes(&random_bits()).unwrap();
+
+    let alice_pk = PublicKey::from(&alice_sk);
+    let bob_pk = Ed25519PublicKey::from(&bob_sk);
+
+    let bob_sk_dhx = SecretKey::try_from(bob_sk).unwrap();
+    let bob_pk_dhx = PublicKey::try_from(bob_pk).unwrap();
+
+    assert_eq!(
+        alice_sk.exchange(&bob_pk_dhx),
+        bob_sk_dhx.exchange(&alice_pk)
     );
 }
 

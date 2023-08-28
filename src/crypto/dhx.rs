@@ -6,14 +6,16 @@ use super::{
     ed25519::{Ed25519PublicKey, Ed25519SecretKey},
     Error, Key, Result, X25519,
 };
+use curve25519_dalek::{
+    scalar::{clamp_integer, Scalar},
+    MontgomeryPoint,
+};
 use std::{
     fmt::Display,
     io::{Error as IoError, ErrorKind},
 };
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use curve25519_dalek::edwards::CompressedEdwardsY;
-use x25519_dalek::{PublicKey as DalekPublicKey, StaticSecret};
 
 /// The public key size for Diffie-Hellman
 pub const PUBLIC_KEY_LENGTH: usize = 32_usize;
@@ -21,8 +23,7 @@ pub const PUBLIC_KEY_LENGTH: usize = 32_usize;
 pub const SECRET_KEY_LENGTH: usize = 32_usize;
 
 /// The secret key for Diffie-Hellman
-/// Basically it's a wrapper on a x25519-dalek
-pub struct SecretKey(StaticSecret);
+pub struct SecretKey(Scalar);
 
 impl BorshSerialize for SecretKey {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -46,7 +47,7 @@ impl BorshDeserialize for SecretKey {
 
 /// The public key for Diffie-Hellman
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct PublicKey(DalekPublicKey);
+pub struct PublicKey(MontgomeryPoint);
 
 impl BorshSerialize for PublicKey {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -96,7 +97,7 @@ impl Key<SECRET_KEY_LENGTH> for SecretKey {
         let mut temp_buf = [0_u8; SECRET_KEY_LENGTH];
         temp_buf.copy_from_slice(buf);
 
-        Ok(Self(StaticSecret::from(temp_buf)))
+        Ok(Self(Scalar::from_bytes_mod_order(clamp_integer(temp_buf))))
     }
 }
 
@@ -122,13 +123,13 @@ impl Key<PUBLIC_KEY_LENGTH> for PublicKey {
         let mut temp_buf = [0_u8; PUBLIC_KEY_LENGTH];
         temp_buf.copy_from_slice(buf);
 
-        Ok(Self(DalekPublicKey::from(temp_buf)))
+        Ok(Self(MontgomeryPoint(temp_buf)))
     }
 }
 
 impl<'a> From<&'a SecretKey> for PublicKey {
     fn from(secret: &'a SecretKey) -> PublicKey {
-        Self(DalekPublicKey::from(&secret.0))
+        Self(MontgomeryPoint::mul_base(&secret.0))
     }
 }
 
@@ -142,39 +143,20 @@ impl SecretKey {
     /// Byte array with a shared secret key
     ///
     pub fn exchange(&self, other_public: &PublicKey) -> [u8; SECRET_KEY_LENGTH] {
-        self.0.diffie_hellman(&other_public.0).to_bytes()
+        (self.0 * other_public.0).to_bytes()
     }
 }
 
-impl TryFrom<Ed25519PublicKey> for PublicKey {
-    type Error = Error;
-
-    fn try_from(key: Ed25519PublicKey) -> Result<Self> {
-        let edwards_point = CompressedEdwardsY::from_slice(key.as_bytes())
-            .decompress()
-            .ok_or_else(|| {
-                Error::from_bytes::<Ed25519PublicKey>(
-                    key.as_bytes(),
-                    "Couldn't decompress an Edwards point".to_owned(),
-                )
-            })?;
-
-        PublicKey::try_from_bytes(edwards_point.to_montgomery().as_bytes())
+impl From<Ed25519PublicKey> for PublicKey {
+    fn from(key: Ed25519PublicKey) -> Self {
+        PublicKey(key.0.to_montgomery())
     }
 }
 
-impl TryFrom<Ed25519SecretKey> for SecretKey {
-    type Error = Error;
-
-    fn try_from(key: Ed25519SecretKey) -> Result<Self> {
-        use ed25519_dalek::{ExpandedSecretKey, SecretKey as S};
-
-        let expanded_key =
-            ExpandedSecretKey::from(&S::from_bytes(key.as_bytes()).map_err(|err| {
-                Error::from_bytes::<Ed25519SecretKey>(key.as_bytes(), err.to_string())
-            })?);
-
-        Self::try_from_bytes(&expanded_key.to_bytes()[..32])
+impl From<Ed25519SecretKey> for SecretKey {
+    fn from(key: Ed25519SecretKey) -> Self {
+        use ed25519_dalek::SigningKey;
+        SecretKey(SigningKey::from_bytes(key.as_bytes()).to_scalar())
     }
 }
 
