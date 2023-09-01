@@ -3,7 +3,7 @@
 //! Used Dalek cryptography, and implemented [`Borsh`](https://borsh.io/) serialization for them
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey, Signature, Verifier};
+use ed25519_dalek::{SecretKey, Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -22,7 +22,7 @@ pub use ed25519_dalek::{
 
 /// The public key wrapper around ed25519-dalek public key
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct Ed25519PublicKey(PublicKey);
+pub struct Ed25519PublicKey(pub(super) VerifyingKey);
 
 impl Ed25519PublicKey {
     /// Verifies the signature of the data
@@ -48,7 +48,7 @@ impl Key<ED25519_PUBLIC_KEY_LENGTH> for Ed25519PublicKey {
     }
 
     fn try_from_bytes(buf: &[u8]) -> Result<Self> {
-        PublicKey::from_bytes(buf)
+        VerifyingKey::try_from(buf)
             .map(Self)
             .map_err(|err| Error::from_bytes::<Ed25519PublicKey>(buf, err.to_string()))
     }
@@ -82,7 +82,7 @@ impl BorshSerialize for Ed25519PublicKey {
 
 impl From<&Ed25519SecretKey> for Ed25519PublicKey {
     fn from(sk: &Ed25519SecretKey) -> Self {
-        Self(PublicKey::from(&sk.0))
+        Self(VerifyingKey::from(&SigningKey::from(sk.0)))
     }
 }
 
@@ -107,9 +107,8 @@ pub struct Ed25519SecretKey(SecretKey);
 
 impl Ed25519SecretKey {
     /// Sign a `data` with a private key
-    pub fn sign(&self, data: &[u8], public_key: &Ed25519PublicKey) -> Ed25519Signature {
-        let expanded_key = ExpandedSecretKey::from(&self.0);
-        Ed25519Signature(expanded_key.sign(data, &public_key.0))
+    pub fn sign(&self, data: &[u8]) -> Ed25519Signature {
+        Ed25519Signature(SigningKey::from(self.0).sign(data))
     }
 
     /// Get a [`Ed25519SecretKey`] from a [`str`]
@@ -136,8 +135,8 @@ impl Ed25519SecretKey {
 
     /// Returns a key in the raw bytes
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; ED25519_PUBLIC_KEY_LENGTH] {
-        self.0.as_bytes()
+    pub fn as_bytes(&self) -> &[u8; ED25519_SECRET_KEY_LENGTH] {
+        &self.0
     }
 }
 
@@ -146,12 +145,12 @@ impl Key<ED25519_SECRET_KEY_LENGTH> for Ed25519SecretKey {
 
     #[inline]
     fn to_bytes(&self) -> [u8; ED25519_SECRET_KEY_LENGTH] {
-        self.0.to_bytes()
+        self.0.to_owned()
     }
 
     fn try_from_bytes(buf: &[u8]) -> Result<Self> {
-        SecretKey::from_bytes(buf)
-            .map(Self)
+        SigningKey::try_from(buf)
+            .map(|key| Ed25519SecretKey(key.to_bytes()))
             .map_err(|err| Error::from_bytes::<Ed25519SecretKey>(buf, err.to_string()))
     }
 }
@@ -171,7 +170,7 @@ impl BorshDeserialize for Ed25519SecretKey {
 
 impl BorshSerialize for Ed25519SecretKey {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writer.write_all(self.0.as_bytes())
+        writer.write_all(&self.0)
     }
 }
 
@@ -188,7 +187,7 @@ impl Key<ED25519_SIGNATURE_LENGTH> for Ed25519Signature {
     }
 
     fn try_from_bytes(buf: &[u8]) -> Result<Self> {
-        Signature::from_bytes(buf)
+        Signature::try_from(buf)
             .map(Self)
             .map_err(|err| Error::from_bytes::<Ed25519Signature>(buf, err.to_string()))
     }
@@ -245,13 +244,14 @@ impl Keypair {
     pub fn new(secret_key: Ed25519SecretKey) -> Self {
         let public_key = Ed25519PublicKey::from(&secret_key);
         Self {
-            public_key,
             secret_key,
+            public_key,
         }
     }
 
     /// Creates a new keypair from the string representation
-    /// ```ed25519:5nEtNZTBUPJUwB7v9tfCgm1xfp1E7wXcZdWDpz1JwKckqG5pqstumaqRHJjtfFZMtik4TpgCVmmpvpxjEcq3CTLx```
+    ///
+    /// **Example**: ```ed25519:5nEtNZTBUPJUwB7v9tfCgm1xfp1E7wXcZdWDpz1JwKckqG5pqstumaqRHJjtfFZMtik4TpgCVmmpvpxjEcq3CTLx```
     pub fn from_expanded_secret(expanded: &str) -> Result<Self> {
         let secret_key = Ed25519SecretKey::from_expanded(expanded)?;
         let public_key = Ed25519PublicKey::from(&secret_key);
@@ -263,7 +263,7 @@ impl Keypair {
 
     /// Sign the data with a private key
     pub fn sign(&self, data: &[u8]) -> Ed25519Signature {
-        self.secret_key.sign(data, &self.public_key)
+        self.secret_key.sign(data)
     }
 
     /// Verify the signed data
