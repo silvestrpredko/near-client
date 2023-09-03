@@ -14,8 +14,8 @@ use crate::{
             FinalExecutionOutcomeView, FinalExecutionStatus,
         },
     },
-    prelude::{InvalidTxError, TxExecutionError},
-    rpc::{client::RpcClient, Error as RpcError, NearError},
+    prelude::{transaction_errors::TxExecutionErrorContainer, InvalidTxError, TxExecutionError},
+    rpc::{client::RpcClient, CauseKind, Error as RpcError, NearError, NearErrorVariant},
     utils::{extract_logs, serialize_arguments, serialize_transaction},
     Error, Result, ViewAccessKeyCall,
 };
@@ -31,7 +31,7 @@ use std::{
 
 use crate::crypto::prelude::*;
 use base64::prelude::*;
-use serde::de::{self, DeserializeOwned};
+use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use url::Url;
 
@@ -173,7 +173,7 @@ impl NearClient {
                     data: serde_json::from_slice(&data).map_err(Error::DeserializeResponseView)?,
                 }),
                 CallResult::Err(cause) => Err(Error::ViewCall(RpcError::NearProtocol(
-                    NearError::new_simple(cause),
+                    NearError::handler(cause),
                 ))),
             })
     }
@@ -697,11 +697,12 @@ async fn commit_with_retry<'a>(
             .rpc()
             .request(transaction_type, Some(json!(vec![transaction])))
             .await
-            .map_err(transaction_err);
+            .map_err(transaction_error);
 
-        if let Err(Error::CommitTransaction(TxExecutionError::InvalidTxError(
-            InvalidTxError::InvalidNonce { ak_nonce, .. },
-        ))) = resp
+        if let Err(Error::TxExecution(
+            TxExecutionError::InvalidTxError(InvalidTxError::InvalidNonce { ak_nonce, .. }),
+            ..,
+        )) = resp
         {
             if retry_count > 1 && execution_count <= retry_count {
                 call.info().signer().update_nonce(ak_nonce + 1);
@@ -713,29 +714,26 @@ async fn commit_with_retry<'a>(
     }
 }
 
-fn transaction_err(err: RpcError) -> Error {
-    let RpcError::NearProtocol(near_err) = err else {
+// Try to parse the error that may be located in the node response
+fn transaction_error(err: RpcError) -> Error {
+    let RpcError::NearProtocol(near_err) = &err else {
         return Error::RpcError(err);
     };
 
-    let tx_err = near_err
-        .data()
-        .get_mut("TxExecutionError")
-        .map(Value::take)
-        .ok_or(Error::DeserializeTransactionOutput(de::Error::custom(
-            "TxExecutionError not found in error response",
-        )));
-
-    let tx_err = match tx_err {
-        Ok(value) => value,
-        Err(err) => return err,
+    let (NearErrorVariant::RequestValidation(CauseKind::ParseError(cause))
+    | NearErrorVariant::Handler(CauseKind::InvalidTransaction(cause))) = near_err.error()
+    else {
+        return Error::RpcError(err);
     };
 
-    let (Ok(final_err) | Err(final_err)) = serde_json::from_value::<TxExecutionError>(tx_err)
-        .map_err(Error::DeserializeTransactionOutput)
-        .map(Error::CommitTransaction);
-
-    final_err
+    serde_json::from_value::<TxExecutionErrorContainer>(cause.to_owned())
+        .or_else(|err| {
+            near_err.data().ok_or(err).and_then(|cause| {
+                serde_json::from_value::<TxExecutionErrorContainer>(cause.to_owned())
+            })
+        })
+        .map(|exec_err| Error::TxExecution(exec_err.tx_execution_error, Default::default()))
+        .unwrap_or(Error::RpcError(err))
 }
 
 #[allow(clippy::result_large_err)]
