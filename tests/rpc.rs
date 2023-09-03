@@ -2,8 +2,13 @@ use std::{fs::write, str::FromStr};
 
 use itertools::Itertools;
 use near_client::{
-    crypto::prelude::*, near_primitives_light::types::Finality, prelude::*, Error,
-    ViewAccessKeyCall,
+    crypto::prelude::*,
+    near_primitives_light::types::Finality,
+    prelude::{
+        transaction_errors::{ActionError, ActionErrorKind},
+        *,
+    },
+    Error, ViewAccessKeyCall,
 };
 
 use near_primitives_core::{
@@ -185,6 +190,86 @@ async fn contract_function_call_failed() {
         .commit(Finality::None)
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn errors() {
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
+    let signer = create_signer(&worker, &client, &signer_account_id).await;
+    let wasm = download_contract().await;
+
+    client
+        .deploy_contract(&signer, &signer_account_id, wasm)
+        .commit(Finality::None)
+        .await
+        .unwrap();
+
+    signer.update_nonce(0);
+
+    // wrong nonce
+    assert!(matches!(
+        client
+            .function_call(&signer, &signer_account_id, "new_default_meta")
+            .args(json!({
+                "owner_id": &signer_account_id,
+                "total_supply": "100",
+            }))
+            .gas(near_units::parse_gas!("300 T") as u64)
+            .retry(Retry::NONE)
+            .commit(Finality::None)
+            .await,
+        Err(Error::TxExecution(
+            TxExecutionError::InvalidTxError(InvalidTxError::InvalidNonce { .. }),
+            ..
+        ))
+    ));
+
+    // wrong arguments
+    assert!(matches!(
+        client
+            .function_call(&signer, &signer_account_id, "new_default_meta")
+            .args(json!({
+                "owner_id": &signer_account_id,
+                "total_suppl": "100",
+            }))
+            .gas(near_units::parse_gas!("300 T") as u64)
+            .retry(Retry::ONCE)
+            .commit(Finality::None)
+            .await,
+        Err(Error::TxExecution(
+            TxExecutionError::ActionError(ActionError {
+                kind: ActionErrorKind::FunctionCallError(
+                    transaction_errors::FunctionCallError::ExecutionError(..)
+                ),
+                ..
+            }),
+            ..
+        ))
+    ));
+
+    // wrong method
+    assert!(matches!(
+        client
+            .function_call(&signer, &signer_account_id, "new_default_met")
+            .args(json!({
+                "owner_id": &signer_account_id,
+                "total_supply": "100",
+            }))
+            .gas(near_units::parse_gas!("300 T") as u64)
+            .commit(Finality::None)
+            .await,
+        Err(Error::TxExecution(
+            TxExecutionError::ActionError(ActionError {
+                kind: ActionErrorKind::FunctionCallError(
+                    transaction_errors::FunctionCallError::MethodResolveError(..)
+                ),
+                ..
+            }),
+            ..
+        ))
+    ));
 }
 
 // Temporary ignore tests cause of this issue, https://github.com/near/nearcore/issues/9143

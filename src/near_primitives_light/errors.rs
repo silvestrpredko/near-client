@@ -1,13 +1,19 @@
 use crate::crypto::prelude::*;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Display};
-
 use near_primitives_core::{
     serialize::dec_format,
     types::{AccountId, Balance, Gas, Nonce},
 };
+use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Display};
 
 use borsh::{BorshDeserialize, BorshSerialize};
+
+/// Container for TxExecutionError, when error comes not from TransactionOutcome
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct TxExecutionErrorContainer {
+    pub tx_execution_error: TxExecutionError,
+}
 
 /// Error returned in the ExecutionOutcome in case of failure
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

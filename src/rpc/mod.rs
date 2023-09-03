@@ -1,9 +1,8 @@
 pub(crate) mod client;
 
-use std::fmt::Display;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt::Display;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -25,33 +24,53 @@ impl From<NearError> for Error {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NearError {
-    name: String,
-    cause: Cause,
-    code: i32,
-    data: Value,
-    message: String,
+    #[serde(flatten)]
+    error: NearErrorVariant,
+    data: Option<Value>,
+    message: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "name", content = "cause")]
+pub enum NearErrorVariant {
+    #[serde(rename = "REQUEST_VALIDATION_ERROR")]
+    RequestValidation(CauseKind),
+    #[serde(rename = "HANDLER_ERROR")]
+    Handler(CauseKind),
+    #[serde(rename = "INTERNAL_ERROR")]
+    Internal(CauseKind),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "name", content = "info", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CauseKind {
+    InvalidTransaction(Value),
+    TimeoutError,
+    ParseError(Value),
+    InternalError(Value),
 }
 
 impl NearError {
-    pub fn new_simple(cause: Value) -> Self {
+    pub fn handler(cause: Value) -> Self {
         Self {
-            data: cause,
-            ..Default::default()
+            error: NearErrorVariant::Handler(CauseKind::InvalidTransaction(cause)),
+            data: None,
+            message: None,
         }
     }
 
-    pub fn new_with_msg(cause: Value, message: String) -> Self {
-        Self {
-            data: cause,
-            message,
-            ..Default::default()
-        }
+    pub fn data(&self) -> Option<&Value> {
+        self.data.as_ref()
     }
 
-    pub fn data(self) -> Value {
-        self.data
+    pub fn message(&self) -> Option<&str> {
+        self.message.as_deref()
+    }
+
+    pub fn error(&self) -> &NearErrorVariant {
+        &self.error
     }
 }
 
@@ -59,24 +78,8 @@ impl Display for NearError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Name: {}, Message: {}, Cause: {}, Descr: {}",
-            self.name, self.message, self.cause, self.data
+            "Error: {:?}, Message: {:?}, Data: {:?}",
+            self.error, self.message, self.data
         )
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Cause {
-    info: Option<Value>,
-    name: String,
-}
-
-impl Display for Cause {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(info) = &self.info {
-            return write!(f, "{info}");
-        }
-
-        Ok(())
     }
 }

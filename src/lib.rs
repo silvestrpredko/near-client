@@ -62,9 +62,6 @@ pub enum Error {
     #[error("Can't view a transaction, cause: [\"{0}\"]")]
     ViewTransaction(rpc::Error),
     #[doc(hidden)]
-    #[error("Transaction commit failed with an error, cause: [\"{0}\"]")]
-    CommitTransaction(TxExecutionError),
-    #[doc(hidden)]
     #[error("Failed to execute rpc call to Near blockchain, cause: [\"{0}\"]")]
     RpcError(rpc::Error),
     #[doc(hidden)]
