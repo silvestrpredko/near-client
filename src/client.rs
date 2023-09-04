@@ -11,7 +11,7 @@ use crate::{
         types::Finality,
         views::{
             AccessKeyListView, AccessKeyView, BlockView, ExecutionOutcomeWithIdView,
-            FinalExecutionOutcomeView, FinalExecutionStatus,
+            FinalExecutionOutcomeView, FinalExecutionStatus, StatusResponse,
         },
     },
     prelude::{transaction_errors::TxExecutionErrorContainer, InvalidTxError, TxExecutionError},
@@ -270,6 +270,19 @@ impl NearClient {
             .map_err(Error::ViewCall)
             .and_then(|it| {
                 serde_json::from_value::<ViewStateResult>(it).map_err(Error::DeserializeViewCall)
+            })
+    }
+
+    /// Returns general status of a given node
+    /// (sync status, nearcore node version, protocol version, etc),
+    /// and the current set of validators.
+    pub async fn network_status(&self) -> Result<StatusResponse> {
+        self.rpc_client
+            .request("status", None)
+            .await
+            .map_err(Error::RpcError)
+            .and_then(|it| {
+                serde_json::from_value::<StatusResponse>(it).map_err(Error::DeserializeResponseView)
             })
     }
 
