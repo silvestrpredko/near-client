@@ -1,24 +1,10 @@
-use std::{fs::write, str::FromStr};
-
 use itertools::Itertools;
-use near_client::{
-    crypto::prelude::*,
-    near_primitives_light::types::Finality,
-    prelude::{
-        transaction_errors::{ActionError, ActionErrorKind},
-        *,
-    },
-    Error, ViewAccessKeyCall,
-};
-
-use near_primitives_core::{
-    account::{AccessKeyPermission, FunctionCallPermission},
-    types::AccountId,
-};
+use near_client::{prelude::*, Error, ViewAccessKeyCall};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use reqwest::Url;
 use serde_json::json;
+use std::{fs::write, str::FromStr};
 use workspaces::{network::Sandbox, types::SecretKey, Worker};
 
 // auxiliary structs and methods
@@ -117,7 +103,7 @@ async fn contract_function_call() {
             "owner_id": &signer_account_id,
             "total_supply": "100",
         }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit(Finality::None)
         .await
         .unwrap();
@@ -148,7 +134,7 @@ async fn contract_function_call_with_wrong_nonce() {
             "owner_id": &signer_account_id,
             "total_supply": "100",
         }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .retry(Retry::TWICE)
         .commit(Finality::None)
         .await
@@ -175,7 +161,7 @@ async fn contract_function_call_failed() {
             "owner_id": &signer_account_id,
             "total_suppl": "100",
         }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit(Finality::None)
         .await
         .is_err());
@@ -186,7 +172,7 @@ async fn contract_function_call_failed() {
             "owner_id": &signer_account_id,
             "total_supply": "100",
         }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit(Finality::None)
         .await
         .unwrap();
@@ -216,7 +202,7 @@ async fn errors() {
                 "owner_id": &signer_account_id,
                 "total_supply": "100",
             }))
-            .gas(near_units::parse_gas!("300 T") as u64)
+            .gas(gas("300 T"))
             .retry(Retry::NONE)
             .commit(Finality::None)
             .await,
@@ -234,7 +220,7 @@ async fn errors() {
                 "owner_id": &signer_account_id,
                 "total_suppl": "100",
             }))
-            .gas(near_units::parse_gas!("300 T") as u64)
+            .gas(gas("300 T"))
             .retry(Retry::ONCE)
             .commit(Finality::None)
             .await,
@@ -257,7 +243,7 @@ async fn errors() {
                 "owner_id": &signer_account_id,
                 "total_supply": "100",
             }))
-            .gas(near_units::parse_gas!("300 T") as u64)
+            .gas(gas("300 T"))
             .commit(Finality::None)
             .await,
         Err(Error::TxExecution(
@@ -327,7 +313,7 @@ async fn view_with_params(client: &NearClient, contract_id: &AccountId) {
 async fn fc_no_params(client: &NearClient, contract_id: &AccountId, signer: &Signer) {
     client
         .function_call(signer, contract_id, "increment")
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit(Finality::None)
         .await
         .unwrap();
@@ -342,7 +328,7 @@ async fn fc_with_one_param_and_result(
     let message = client
         .function_call(signer, contract_id, "change_message")
         .args(json!({ "message": expected_result }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit(Finality::Final)
         .await
         .unwrap()
@@ -357,7 +343,7 @@ async fn fc_with_param_and_result(client: &NearClient, contract_id: &AccountId, 
     let id = client
         .function_call(signer, contract_id, "change_id")
         .args(json!({ "id": expected_id }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit(Finality::Final)
         .await
         .unwrap()
@@ -388,7 +374,7 @@ async fn async_transaction() {
     let transaction_id = client
         .function_call(&signer, &signer_account_id, "change_message")
         .args(json!({ "message": expected_result }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit_async(Finality::Final)
         .await
         .unwrap();
@@ -484,7 +470,7 @@ async fn view_contract_state() {
             "owner_id": &signer_account_id,
             "total_supply": "100",
         }))
-        .gas(near_units::parse_gas!("300 T") as u64)
+        .gas(gas("300 T"))
         .commit(Finality::Final)
         .await
         .unwrap();
