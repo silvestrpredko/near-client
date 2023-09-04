@@ -1145,3 +1145,26 @@ impl TryFrom<ReceiptView> for Receipt {
         })
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct StatusResponse {
+    /// Unique chain id.
+    pub chain_id: String,
+    /// Currently active protocol version.
+    pub protocol_version: u32,
+    /// Latest protocol version that this client supports.
+    pub latest_protocol_version: u32,
+    /// Address for RPC server.  None if node doesn’t have RPC endpoint enabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rpc_addr: Option<String>,
+    /// Validator id of the node
+    pub validator_account_id: Option<AccountId>,
+    /// Public key of the validator.
+    pub validator_public_key: Option<Ed25519PublicKey>,
+    /// Public key of the node.
+    pub node_public_key: Ed25519PublicKey,
+    /// Deprecated; same as `validator_public_key` which you should use instead.
+    pub node_key: Option<Ed25519PublicKey>,
+    /// Uptime of the node.
+    pub uptime_sec: i64,
+}

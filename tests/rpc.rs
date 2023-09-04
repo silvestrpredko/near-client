@@ -727,6 +727,13 @@ async fn view_access_key_list_success() {
 }
 
 #[tokio::test]
+async fn network_status() {
+    let worker = workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+    assert!(client.network_status().await.is_ok());
+}
+
+#[tokio::test]
 async fn delete_access_key() {
     let worker = workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
