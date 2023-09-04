@@ -15,22 +15,42 @@ pub mod utils;
 use std::fmt::Display;
 
 pub use near_primitives_core as core;
-pub use near_primitives_light::errors::TxExecutionError;
 pub use near_units;
 
 type Result<T> = std::result::Result<T, Error>;
+
+/// Parse's human-readable string into [Gas](core::types::Gas)
+///
+/// # Panic
+/// If can't correctly parse input into [Gas](core::types::Gas)
+pub fn gas(input: &str) -> core::types::Gas {
+    near_units::gas::parse(input).unwrap() as u64
+}
+
+/// Parse's human-readable string into [Balance](core::types::Balance)
+///
+/// # Panic
+/// If can't correctly parse input into [Balance](core::types::Balance)
+pub fn near(input: &str) -> core::types::Balance {
+    near_units::near::parse(input).unwrap()
+}
 
 /// Client prelude.
 /// All the frequently used API
 pub mod prelude {
     pub use super::client::*;
     pub use super::components::*;
+    pub use super::core::{
+        account::{AccessKeyPermission, FunctionCallPermission},
+        types::{AccountId, Balance, Gas, Nonce},
+    };
     pub use super::crypto::prelude::*;
     pub use super::near_primitives_light::{
-        errors::{self as transaction_errors, InvalidTxError, TxExecutionError},
+        errors::{self as transaction_errors},
         types::Finality,
     };
-    pub use near_primitives_core::types::{AccountId, Balance, Gas, Nonce};
+    pub use super::{gas, near};
+    pub use transaction_errors::*;
 }
 
 /// Describes errors that could be thrown during execution.
@@ -45,7 +65,7 @@ pub enum Error {
     TxNotStarted(Box<Vec<String>>),
     #[doc(hidden)]
     #[error("Transaction failed during execution, cause [\"{0:?}\"], logs: [\"{1:?}\"]")]
-    TxExecution(TxExecutionError, Box<Vec<String>>),
+    TxExecution(prelude::TxExecutionError, Box<Vec<String>>),
     #[doc(hidden)]
     #[error("Transaction serialization error: [\"{0}\"]")]
     TxSerialization(std::io::Error),
