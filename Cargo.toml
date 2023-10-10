@@ -39,6 +39,6 @@ reqwest = { version = "0.11", features = ["json"] }
 rand_chacha = "0.3"
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }
-workspaces = { git = "https://github.com/near/workspaces-rs.git", features = [
+near-workspaces = { git = "https://github.com/near/near-workspaces-rs.git", features = [
     "unstable",
 ] }
