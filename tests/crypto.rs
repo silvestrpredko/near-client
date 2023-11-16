@@ -318,11 +318,11 @@ fn convert_from_edwards_to_montgomery() {
     let alice_pk = Ed25519PublicKey::from(&alice_sk);
     let bob_pk = Ed25519PublicKey::from(&bob_sk);
 
-    let alice_sk_dhx = SecretKey::try_from(alice_sk).unwrap();
-    let bob_sk_dhx = SecretKey::try_from(bob_sk).unwrap();
+    let alice_sk_dhx = SecretKey::from(alice_sk);
+    let bob_sk_dhx = SecretKey::from(bob_sk);
 
-    let alice_pk_dhx = PublicKey::try_from(alice_pk).unwrap();
-    let bob_pk_dhx = PublicKey::try_from(bob_pk).unwrap();
+    let alice_pk_dhx = PublicKey::from(alice_pk);
+    let bob_pk_dhx = PublicKey::from(bob_pk);
 
     assert_eq!(
         alice_sk_dhx.exchange(&bob_pk_dhx),
@@ -338,8 +338,8 @@ fn convert_from_edwards_to_montgomery_partially() {
     let alice_pk = PublicKey::from(&alice_sk);
     let bob_pk = Ed25519PublicKey::from(&bob_sk);
 
-    let bob_sk_dhx = SecretKey::try_from(bob_sk).unwrap();
-    let bob_pk_dhx = PublicKey::try_from(bob_pk).unwrap();
+    let bob_sk_dhx = SecretKey::from(bob_sk);
+    let bob_pk_dhx = PublicKey::from(bob_pk);
 
     assert_eq!(
         alice_sk.exchange(&bob_pk_dhx),
