@@ -1,11 +1,11 @@
 use itertools::Itertools;
 use near_client::{prelude::*, Error, ViewAccessKeyCall};
+use near_workspaces::{network::Sandbox, types::SecretKey, Worker};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use reqwest::Url;
 use serde_json::json;
 use std::{fs::write, str::FromStr};
-use workspaces::{network::Sandbox, types::SecretKey, Worker};
 
 // auxiliary structs and methods
 fn near_client(worker: &Worker<Sandbox>) -> NearClient {
@@ -24,7 +24,7 @@ async fn create_signer(
     let workspaces_sk = SecretKey::from_str(&keypair).unwrap();
     let _ = worker
         .create_tla(
-            workspaces::AccountId::from_str(signer_acc_id).unwrap(),
+            near_workspaces::AccountId::from_str(signer_acc_id).unwrap(),
             workspaces_sk,
         )
         .await
@@ -55,7 +55,7 @@ async fn clone_and_compile_wasm() -> Vec<u8> {
         std::env::current_dir().unwrap().display()
     );
 
-    workspaces::compile_project(target_path.as_str())
+    near_workspaces::compile_project(target_path.as_str())
         .await
         .unwrap()
 }
@@ -70,7 +70,7 @@ fn random_bits() -> [u8; ED25519_SECRET_KEY_LENGTH] {
 // tests themselves
 #[tokio::test]
 async fn contract_creation() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -85,7 +85,7 @@ async fn contract_creation() {
 
 #[tokio::test]
 async fn contract_function_call() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -111,7 +111,7 @@ async fn contract_function_call() {
 
 #[tokio::test]
 async fn contract_function_call_with_wrong_nonce() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -143,7 +143,7 @@ async fn contract_function_call_with_wrong_nonce() {
 
 #[tokio::test]
 async fn contract_function_call_failed() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -180,7 +180,7 @@ async fn contract_function_call_failed() {
 
 #[tokio::test]
 async fn errors() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -259,10 +259,9 @@ async fn errors() {
 }
 
 // Temporary ignore tests cause of this issue, https://github.com/near/nearcore/issues/9143
-#[ignore]
 #[tokio::test]
 async fn multiple_tests() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -357,7 +356,7 @@ async fn fc_with_param_and_result(client: &NearClient, contract_id: &AccountId, 
 #[ignore]
 #[tokio::test]
 async fn async_transaction() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -406,7 +405,7 @@ async fn async_transaction() {
 
 #[tokio::test]
 async fn view_access_key_success() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -430,7 +429,7 @@ async fn view_access_key_success() {
 
 #[tokio::test]
 async fn view_access_key_failure() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
 
     let new_acc = AccountId::from_str("one.alice.test.near").unwrap();
@@ -452,7 +451,7 @@ async fn view_access_key_failure() {
 async fn view_contract_state() {
     use base64::{engine::general_purpose, Engine as _};
 
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -535,7 +534,7 @@ async fn view_contract_state() {
 
 #[tokio::test]
 async fn create_account() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -559,7 +558,7 @@ async fn create_account() {
 
 #[tokio::test]
 async fn delete_account() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -600,7 +599,7 @@ async fn delete_account() {
 
 #[tokio::test]
 async fn add_access_key_success() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -649,7 +648,7 @@ async fn add_access_key_success() {
 
 #[tokio::test]
 async fn add_access_key_failed() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let _ = create_signer(&worker, &client, &signer_account_id).await;
@@ -672,7 +671,7 @@ async fn add_access_key_failed() {
 
 #[tokio::test]
 async fn view_access_key_list_success() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
@@ -714,14 +713,14 @@ async fn view_access_key_list_success() {
 
 #[tokio::test]
 async fn network_status() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     assert!(client.network_status().await.is_ok());
 }
 
 #[tokio::test]
 async fn delete_access_key() {
-    let worker = workspaces::sandbox().await.unwrap();
+    let worker = near_workspaces::sandbox().await.unwrap();
     let client = near_client(&worker);
     let signer_account_id = AccountId::from_str("alice.test.near").unwrap();
     let signer = create_signer(&worker, &client, &signer_account_id).await;
