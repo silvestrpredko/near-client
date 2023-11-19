@@ -35,13 +35,64 @@ pub fn near(input: &str) -> core::types::Balance {
     near_units::near::parse(input).unwrap()
 }
 
+/// Converts a Near token amount to a human-readable format.
+///
+/// ## Arguments
+///
+/// - `amount` - The amount of Near tokens to convert.
+///
+/// ## Returns
+///
+/// Returns a formatted string representing the Near token amount in a
+/// human-readable format. The format may include commas for thousands separators,
+/// a specific number of decimal places, and a symbol such as "N" to indicate the
+/// token type.
+///
+/// ## Example
+///
+/// ```rust
+/// use near_client::prelude::*;
+///
+/// let amount: u128 = 123456789000000000000000000000;
+/// let formatted_amount = near_to_human(amount);
+/// assert_eq!(formatted_amount, "123,456.789 N");
+/// ```
+pub fn near_to_human(amount: core::types::Balance) -> String {
+    near_units::near::to_human(amount)
+}
+
+/// Converts a gas amount to a human-readable format.
+///
+/// ## Arguments
+///
+/// - `gas` - The amount of gas to convert.
+///
+/// ## Returns
+///
+/// Returns a formatted string representing the gas amount in a
+/// human-readable format. The format may include commas for thousands separators
+/// and a unit such as "MGas" to indicate the gas type.
+///
+/// ## Example
+///
+/// ```rust
+/// use near_client::prelude::*;
+///
+/// let gas: u64 = 123456789;
+/// let formatted_gas = gas_to_human(gas);
+/// assert_eq!(formatted_gas, "123.456789 Mgas");
+/// ```
+pub fn gas_to_human(gas: core::types::Gas) -> String {
+    near_units::gas::to_human(gas as u128)
+}
+
 /// Client prelude.
 /// All the frequently used API
 pub mod prelude {
     pub use super::client::*;
     pub use super::components::*;
     pub use super::core::{
-        account::{AccessKeyPermission, FunctionCallPermission},
+        account::{AccessKeyPermission, Account, FunctionCallPermission},
         types::{AccountId, Balance, Gas, Nonce},
     };
     pub use super::crypto::prelude::*;
@@ -49,7 +100,7 @@ pub mod prelude {
         errors::{self as transaction_errors},
         types::Finality,
     };
-    pub use super::{gas, near};
+    pub use super::{gas, gas_to_human, near, near_to_human};
     pub use transaction_errors::*;
 }
 

@@ -20,7 +20,7 @@ use crate::{
     Error, Result, ViewAccessKeyCall,
 };
 use near_primitives_core::{
-    account::{id::AccountId, AccessKey, AccessKeyPermission},
+    account::{id::AccountId, AccessKey, AccessKeyPermission, Account},
     hash::CryptoHash,
     types::{Balance, Gas, Nonce},
 };
@@ -326,6 +326,31 @@ impl NearClient {
         proceed_outcome(signer, execution_outcome)
     }
 
+    /// Returns basic account information.
+    /// ## Arguments
+    ///
+    /// - `account_id` - The account ID [`AccountId`] for which to retrieve information.
+    ///
+    /// ## Returns
+    ///
+    /// Returns a struct [`Account`] containing basic information about the specified Near account.
+    pub async fn view_account(&self, account_id: &AccountId) -> Result<Account> {
+        self.rpc_client
+            .request(
+                "query",
+                Some(json!({
+                    "request_type": "view_account",
+                    "finality": Finality::Final,
+                    "account_id": account_id,
+                })),
+            )
+            .await
+            .map_err(Error::ViewCall)
+            .and_then(|it| {
+                serde_json::from_value::<Account>(it).map_err(Error::DeserializeViewCall)
+            })
+    }
+
     /// Creates new access key on the specified account
     ///
     /// Arguments
@@ -455,6 +480,30 @@ impl NearClient {
             beneficiary_id: beneficiary_acc_id.clone(),
         }
         .into()];
+
+        FunctionCall::new(info, actions)
+    }
+
+    /// Sends Near tokens from one account to another.
+    ///
+    /// ## Arguments
+    ///
+    /// - `signer` - The account ID of the sender and transaction [`Signer`]
+    /// - `receiver_id` - The account ID of the receiver.
+    /// - `deposit` - The amount of Near tokens to send.
+    ///
+    /// ## Errors
+    ///
+    /// Possible error conditions include insufficient funds, invalid account IDs, or
+    /// other issues preventing the successful execution of the transaction.
+    pub fn send<'a>(
+        &'a self,
+        signer: &'a Signer,
+        receiver_id: &'a AccountId,
+        deposit: Balance,
+    ) -> FunctionCall {
+        let info = TransactionInfo::new(self, signer, receiver_id);
+        let actions = vec![TransferAction { deposit }.into()];
 
         FunctionCall::new(info, actions)
     }
