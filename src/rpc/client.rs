@@ -11,6 +11,7 @@ use url::Url;
 
 type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Clone)]
 pub(crate) struct RpcClient {
     client: Client,
     url: Url,

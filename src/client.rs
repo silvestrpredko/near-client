@@ -106,6 +106,7 @@ impl Signer {
 }
 
 /// Near RPC client
+#[derive(Clone)]
 pub struct NearClient {
     pub(crate) rpc_client: RpcClient,
 }
