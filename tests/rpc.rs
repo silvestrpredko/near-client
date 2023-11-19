@@ -736,6 +736,40 @@ async fn delete_access_key() {
     assert_eq!(access_key_list.keys.len(), 0);
 }
 
+#[tokio::test]
+async fn view_account() {
+    let worker = near_workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+
+    let alice = AccountId::from_str("alice.test.near").unwrap();
+    let _ = create_signer(&worker, &client, &alice).await;
+    let account = client.view_account(&alice).await.unwrap();
+
+    assert_eq!(near_to_human(account.amount()), "100 N");
+}
+
+#[tokio::test]
+async fn send() {
+    let worker = near_workspaces::sandbox().await.unwrap();
+    let client = near_client(&worker);
+
+    let alice = AccountId::from_str("alice.test.near").unwrap();
+    let alice_signer = create_signer(&worker, &client, &alice).await;
+    let bob = AccountId::from_str("bob.test.near").unwrap();
+    let _ = create_signer(&worker, &client, &bob).await;
+
+    client
+        .send(&alice_signer, &bob, near("1 Near"))
+        .commit(Finality::Final)
+        .await
+        .unwrap();
+
+    let alice_account = client.view_account(&alice).await.unwrap();
+    let bob_account = client.view_account(&bob).await.unwrap();
+
+    assert!(bob_account.amount() > alice_account.amount());
+}
+
 fn temp_dir() -> tempfile::TempDir {
     tempfile::Builder::new()
         .prefix("near-client-test-")
