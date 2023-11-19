@@ -1,2 +1,2 @@
 [files]
-extend-exclude = ["tests/rpc.rs", "examples/wallet/dist/*"]
+extend-exclude = ["tests/rpc.rs"]
