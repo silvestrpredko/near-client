@@ -1,0 +1,18 @@
+[package]
+name = "wallet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+console_log = { version = "1"}
+console_error_panic_hook = { version = "0.1"}
+near-client = { path = "../../" }
+log = "0.4"
+leptos = { version = "0.5", features = ["csr"] }
+leptos_meta = { version = "0.5", features = ["csr"] }
+gloo-storage = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+wasm-bindgen = { version = "0.2" }
